@@ -11,11 +11,11 @@ use App\Models\Payroll;
 use App\Models\SalaryDeduction;
 use App\Models\WorkdaySetting;
 use App\Models\Event;
-use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Log;
+use Carbon\CarbonPeriod;
 
 class PayrollController extends Controller
 {
@@ -30,194 +30,195 @@ class PayrollController extends Controller
         $search = $request->query('search');
         $month = $request->query('month', now()->format('Y-m'));
 
-        $employees = Employee::where('status', 'Active')->get();
-        $workdaySetting = WorkdaySetting::first();
+        $employees = Employee::with('division', 'attendanceLogs')
+            ->where('status', 'Active')
+            ->when($search, function ($query) use ($search) {
+                $query->whereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
+            })
+            ->get();
 
+        $workdaySetting = WorkdaySetting::first();
         if (!$workdaySetting) {
             return redirect()->route('settings.index')->with('error', 'Workday settings not found.');
         }
 
         $salaryDeduction = SalaryDeduction::first();
-        $lateDeduction = $salaryDeduction ? $salaryDeduction->late_deduction : 0;
-        $earlyDeduction = $salaryDeduction ? $salaryDeduction->early_deduction : 0;
+        $lateDeduction = $salaryDeduction->late_deduction ?? 0;
+        $earlyDeduction = $salaryDeduction->early_deduction ?? 0;
 
-        $payrolls = $employees
-            ->filter(function ($employee) use ($search) {
-                // Filter berdasarkan pencarian nama karyawan jika ada input search
-                if ($search) {
-                    return stripos($employee->first_name . ' ' . $employee->last_name, $search) !== false;
-                }
-                return true;
-            })
-            ->map(function ($employee) use ($month, $lateDeduction, $earlyDeduction, $workdaySetting) {
-                // Proses perhitungan payroll tetap sama
-                $salary = $employee->current_salary;
-
-                $recap = AttandanceRecap::where('employee_id', $employee->employee_id)->where('month', $month)->first();
-
-                $totalDaysWorked = $recap ? $recap->total_present : 0;
-                $totalLateCheckIn = $recap ? $recap->total_late : 0;
-                $totalEarlyCheckOut = $recap ? $recap->total_early : 0;
-                $totalAbsent = $recap ? $recap->total_absent : 0;
-
-                $totalDaysOff = Offrequest::where('user_id', $employee->user_id)
-                    ->where('status', 'approved')
-                    ->whereYear('start_event', Carbon::parse($month)->year)
-                    ->whereMonth('start_event', Carbon::parse($month)->month)
-                    ->get()
-                    ->sum(function ($off) {
-                        $start = Carbon::parse($off->start_event)->startOfDay();
-                        $end = Carbon::parse($off->end_event)->endOfDay();
-                        return (int) $start->diffInDays($end) + 1;
-                    });
-
-                $effectiveDays = $workdaySetting->effective_days ?? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-                $monthlyWorkdays = $this->calculateWorkdaysForMonth($effectiveDays, $month);
-
-                $effectiveWorkDays = $monthlyWorkdays;
-
-                $workDurationInHours = $employee->check_in_time && $employee->check_out_time ? Carbon::parse($employee->check_in_time)->diffInHours(Carbon::parse($employee->check_out_time)) : 8;
-
-                $dailySalary = $monthlyWorkdays > 0 ? $employee->current_salary / $monthlyWorkdays : 0;
-                $hourlyRate = $workDurationInHours > 0 ? $dailySalary / $workDurationInHours : 0;
-
-                $overtimeData = Overtime::where('employee_id', $employee->employee_id)->where('status', 'approved')->get();
-                $totalOvertimeHours = $overtimeData->sum('duration');
-
-                $overtimePay = $totalOvertimeHours * $hourlyRate;
-
-                $totalLateDeduction = $totalLateCheckIn * $lateDeduction;
-                $totalEarlyDeduction = $totalEarlyCheckOut * $earlyDeduction;
-                $totalDeductions = $totalLateDeduction + $totalEarlyDeduction;
-
-                $baseSalary = $totalDaysWorked * $dailySalary;
-                $totalSalary = $baseSalary - $totalDeductions + $overtimePay;
-
-                // Simpan ke database atau update jika sudah ada
-                Payroll::updateOrCreate(
-                    [
-                        'employee_id' => $employee->employee_id,
-                        'month' => $month,
-                    ],
-                    [
-                        'employee_name' => $employee->first_name . ' ' . $employee->last_name,
-                        'total_days_worked' => $totalDaysWorked,
-                        'total_absent' => $totalAbsent,
-                        'total_days_off' => $totalDaysOff,
-                        'total_late_check_in' => $totalLateCheckIn,
-                        'total_early_check_out' => $totalEarlyCheckOut,
-                        'effective_work_days' => $effectiveWorkDays,
-                        'current_salary' => $salary,
-                        'overtime_pay' => $overtimePay,
-                        'total_salary' => $totalSalary,
-                        'status' => 'Pending',
-                    ],
-                );
-
-                return [
-                    'id' => $employee->employee_id,
-                    'employee_name' => $employee->first_name . ' ' . $employee->last_name,
-                    'current_salary' => $salary,
-                    'total_days_worked' => $totalDaysWorked,
-                    'total_days_off' => $totalDaysOff,
-                    'total_absent' => $totalAbsent,
-                    'total_late_check_in' => $totalLateCheckIn,
-                    'total_early_check_out' => $totalEarlyCheckOut,
-                    'effective_work_days' => $effectiveWorkDays,
-                    'overtime_pay' => $overtimePay,
-                    'total_salary' => $totalSalary,
-                    'status' => 'Pending',
-                ];
-            });
+        $payrolls = $employees->map(function ($employee) use ($month, $workdaySetting, $lateDeduction, $earlyDeduction) {
+            if ($employee->employee_type === 'Freelance') {
+                return $this->calculateFreelancePayroll($employee, $month);
+            } else {
+                return $this->calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction);
+            }
+        })->filter();
 
         return view('Superadmin.payroll.index', compact('payrolls', 'month', 'search'));
     }
-    
-    private function calculateWorkdaysForMonth(array $effectiveDays, string $month): int
-{
-    [$year, $monthNumber] = explode('-', $month);
-
-    // Ambil tanggal mulai dan akhir bulan
-    $startDate = Carbon::create($year, $monthNumber, 1)->startOfMonth();
-    $endDate = Carbon::create($year, $monthNumber, 1)->endOfMonth();
-
-    // Ambil semua tanggal libur dari tabel event (kategori 'danger')
-    $holidayDates = Event::where('category', 'danger')
-        ->whereBetween('start_date', [$startDate, $endDate])
-        ->get()
-        ->flatMap(function ($event) {
-            return CarbonPeriod::create($event->start_date, $event->end_date)->toArray();
-        })
-        ->map(fn ($date) => $date->format('Y-m-d'))
-        ->unique()
-        ->toArray();
-
-    // Iterasi tanggal dalam bulan dan hitung hari kerja
-    $period = CarbonPeriod::create($startDate, $endDate);
-    $workdays = collect($period)->filter(function ($date) use ($effectiveDays, $holidayDates) {
-        return in_array($date->format('l'), $effectiveDays) && !in_array($date->format('Y-m-d'), $holidayDates);
-    });
-
-    return $workdays->count();
-}
 
 
 
-    public function approve($id)
+
+    private function calculateFreelancePayroll($employee, $month)
     {
-        // Mencari payroll berdasarkan ID
-        $payroll = Payroll::find($id);
-
-        // Mengecek apakah payroll ditemukan dan statusnya 'pending'
-        if ($payroll && $payroll->status === 'pending') {
-            // Mengubah status menjadi 'approved'
-            $payroll->status = 'approved';
-            $payroll->save(); // Menyimpan perubahan ke database
-
-            // Mengirim pesan sukses setelah berhasil approve
-            return redirect()->route('payroll.index')->with('success', 'Payroll data approved!');
+        $hourlyRate = $employee->division->hourly_rate ?? 0;
+    
+        $logs = $employee->attendanceLogs()
+            ->whereMonth('check_in', Carbon::parse($month)->month)
+            ->whereYear('check_in', Carbon::parse($month)->year)
+            ->get();
+    
+        $standardIn = '09:00';
+        $overtimeStart = '18:30';
+        $toleranceMinutes = 15;
+    
+        $totalNormalHours = 0;
+        $totalOvertimeHours = 0;
+        $lateCount = 0;
+        $uniqueWorkDays = [];
+    
+        foreach ($logs as $log) {
+            if (!$log->check_in || !$log->check_out) continue;
+    
+            $checkIn = Carbon::parse($log->check_in);
+            $checkOut = Carbon::parse($log->check_out);
+            $workDate = $checkIn->toDateString();
+            $uniqueWorkDays[$workDate] = true;
+    
+            // Hitung telat
+            $isLate = $checkIn->gt($checkIn->copy()->setTimeFromTimeString($standardIn)->addMinutes($toleranceMinutes));
+            if ($isLate) $lateCount++;
+    
+            // Normal hours
+            $normalHours = 8;
+            if ($isLate) {
+                $normalHours = max(0, $normalHours - 1);
+            }
+            $totalNormalHours += $normalHours;
+    
+            // Hitung overtime
+            $overtimeThreshold = $checkOut->copy()->startOfDay()->setTimeFromTimeString($overtimeStart);
+            if ($checkOut->gt($overtimeThreshold)) {
+                $overtimeMinutes = $overtimeThreshold->diffInMinutes($checkOut);
+                $overtime = ceil($overtimeMinutes / 60); // bulatkan ke atas
+            } else {
+                $overtime = 0;
+            }
+    
+            $totalOvertimeHours += $overtime;
+    
+            // Log
+            \Log::info("PayrollLog | {$employee->name} | {$workDate} | In: {$checkIn->format('H:i')} | Out: {$checkOut->format('H:i')} | NormalHours: {$normalHours} | Overtime: {$overtime} | Telat: " . ($isLate ? 'Ya' : 'Tidak'));
         }
+    
+        $baseSalary = $totalNormalHours * $hourlyRate;
+        $overtimePay = $totalOvertimeHours * $hourlyRate;
+        $totalSalary = $baseSalary + $overtimePay;
+    
+        \Log::info("Payroll Summary | {$employee->name} | Month: {$month} | WorkDays: " . count($uniqueWorkDays) . " | Total Normal Hours: {$totalNormalHours} | Overtime Hours: {$totalOvertimeHours} | Base Salary: {$baseSalary} | Overtime Pay: {$overtimePay} | Total Salary: {$totalSalary}");
+    
+        return $this->storePayroll(
+            $employee,
+            $month,
+            $totalSalary,
+            $baseSalary,
+            $overtimePay,
+            count($uniqueWorkDays),
+            0, // Absent
+            0, // Early checkout
+            count($uniqueWorkDays), // Effective days
+            $lateCount
+        );
+    }
+    
+    
+    private function calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction)
+    {
+        $recap = AttandanceRecap::where('employee_id', $employee->employee_id)->where('month', $month)->first();
 
-        // Jika tidak ditemukan atau sudah approve
-        return redirect()->route('payroll.index')->with('error', 'Payroll data already approved or not found.');
+        $totalDaysWorked = $recap->total_present ?? 0;
+        $totalLateCheckIn = $recap->total_late ?? 0;
+        $totalEarlyCheckOut = $recap->total_early ?? 0;
+        $totalAbsent = $recap->total_absent ?? 0;
+
+        $monthlyWorkdays = $this->calculateWorkdaysForMonth($workdaySetting->effective_days ?? [], $month);
+
+        $dailySalary = $monthlyWorkdays > 0 ? $employee->current_salary / $monthlyWorkdays : 0;
+        $workDurationInHours = Carbon::parse($employee->check_out_time)->diffInHours(Carbon::parse($employee->check_in_time));
+        $hourlyRate = $dailySalary / ($workDurationInHours ?: 1);
+
+        $overtimeData = Overtime::where('employee_id', $employee->employee_id)->where('status', 'approved')->get();
+        $totalOvertimeHours = $overtimeData->sum('duration');
+        $overtimePay = $totalOvertimeHours * $hourlyRate;
+
+        $totalDeductions = ($totalLateCheckIn * $lateDeduction) + ($totalEarlyCheckOut * $earlyDeduction);
+        $baseSalary = $totalDaysWorked * $dailySalary;
+        $totalSalary = $baseSalary - $totalDeductions + $overtimePay;
+
+        return $this->storePayroll($employee, $month, $totalSalary, $baseSalary, $overtimePay, $totalDaysWorked, $totalAbsent, $totalEarlyCheckOut, $monthlyWorkdays, $totalLateCheckIn);
     }
 
-    public function exportToCsv()
+    private function storePayroll($employee, $month, $totalSalary, $baseSalary, $overtimePay, $totalDaysWorked, $totalAbsent, $totalEarlyCheckOut, $effectiveWorkDays, $totalLateCheckIn)
     {
-        $payrolls = Payroll::where('status', 'approved')->get();
+        $isFreelance = $employee->employee_type === 'Freelance';
 
-        // Debugging payroll data jika ada data kosong
-        if ($payrolls->isEmpty()) {
-            return redirect()->back()->with('error', 'No approved payroll data available.');
-        }
+        Payroll::updateOrCreate(
+            ['employee_id' => $employee->employee_id, 'month' => $month],
+            [
+                'employee_name' => $employee->first_name . ' ' . $employee->last_name,
+                'current_salary' => $isFreelance ? 0 : ($employee->current_salary ?? 0),
+                'total_days_worked' => $totalDaysWorked,
+                'total_absent' => $totalAbsent,
+                'total_days_off' => 0,
+                'total_late_check_in' => $totalLateCheckIn,
+                'total_early_check_out' => $totalEarlyCheckOut,
+                'effective_work_days' => $effectiveWorkDays,
+                'overtime_pay' => $overtimePay,
+                'total_salary' => $totalSalary,
+                'status' => 'Pending',
+            ]
+        );
 
-        $csvHeader = ['Employee Name', 'Current Salary', 'Total Days Worked', 'Total Days Off', 'Total Absent', 'Total Late Check In', 'Total Early Check Out', 'Effective Work Days', 'Overtime Pay', 'Total Salary', 'Status'];
+        return [
+            'id' => $employee->employee_id,
+            'employee_name' => $employee->first_name . ' ' . $employee->last_name,
+            'current_salary' => $isFreelance ? 0 : ($employee->current_salary ?? 0),
+            'total_days_worked' => $totalDaysWorked,
+            'total_absent' => $totalAbsent,
+            'total_days_off' => 0,
+            'total_late_check_in' => $totalLateCheckIn,
+            'total_early_check_out' => $totalEarlyCheckOut,
+            'effective_work_days' => $effectiveWorkDays,
+            'overtime_pay' => $overtimePay,
+            'total_salary' => $totalSalary,
+            'status' => 'Pending',
+        ];
+    }
 
-        $csvData = $payrolls->map(function ($payroll) {
-            return [$payroll->employee_name, $payroll->current_salary, $payroll->total_days_worked, $payroll->total_days_off, $payroll->total_absent, $payroll->total_late_check_in, $payroll->total_early_check_out, $payroll->effective_work_days, $payroll->overtime_pay, $payroll->total_salary, $payroll->status];
+
+    private function calculateWorkdaysForMonth(array $effectiveDays, string $month): int
+    {
+        [$year, $monthNumber] = explode('-', $month);
+
+        $startDate = Carbon::create($year, $monthNumber, 1)->startOfMonth();
+        $endDate = Carbon::create($year, $monthNumber, 1)->endOfMonth();
+
+        $holidayDates = Event::where('category', 'danger')
+            ->whereBetween('start_date', [$startDate, $endDate])
+            ->get()
+            ->flatMap(function ($event) {
+                return CarbonPeriod::create($event->start_date, $event->end_date)->toArray();
+            })
+            ->map(fn($date) => $date->format('Y-m-d'))
+            ->unique()
+            ->toArray();
+
+        $period = CarbonPeriod::create($startDate, $endDate);
+        $workdays = collect($period)->filter(function ($date) use ($effectiveDays, $holidayDates) {
+            return in_array($date->format('l'), $effectiveDays) && !in_array($date->format('Y-m-d'), $holidayDates);
         });
 
-        $filename = 'payroll_approved_' . now()->format('Y-m-d_H-i-s') . '.csv';
-
-        $headers = [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => "attachment; filename=$filename",
-            'Pragma' => 'no-cache',
-            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
-            'Expires' => '0',
-        ];
-
-        return Response::stream(
-            function () use ($csvHeader, $csvData) {
-                $handle = fopen('php://output', 'w');
-                fputcsv($handle, $csvHeader);
-                foreach ($csvData as $row) {
-                    fputcsv($handle, $row);
-                }
-                fclose($handle);
-            },
-            200,
-            $headers,
-        );
+        return $workdays->count();
     }
 }

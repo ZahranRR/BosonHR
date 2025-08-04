@@ -19,7 +19,7 @@ class Employee extends Model
     protected $keyType = 'int';
     public $timestamps = true;
 
-    protected $fillable = ['user_id', 'recruitment_id', 'employee_number', 'first_name', 'last_name', 'email', 'check_in_time', 'check_out_time', 'division_id', 'place_birth', 'date_birth', 'identity_number', 'address', 'current_address', 'blood_type', 'blood_rhesus', 'phone_number', 'hp_number', 'marital_status', 'cv_file', 'update_cv', 'last_education', 'degree', 'starting_date', 'interview_by', 'current_salary', 'insurance', 'serious_illness', 'hereditary_disease', 'emergency_contact', 'relations', 'emergency_number', 'status'];
+    protected $fillable = ['user_id', 'recruitment_id', 'employee_number', 'first_name', 'last_name', 'email', 'check_in_time', 'check_out_time', 'division_id', 'place_birth', 'date_birth', 'identity_number', 'address', 'current_address', 'blood_type', 'blood_rhesus', 'phone_number', 'hp_number', 'marital_status', 'cv_file', 'update_cv', 'last_education', 'degree', 'starting_date', 'interview_by', 'current_salary', 'attendance_allowance', 'insurance', 'serious_illness', 'hereditary_disease', 'emergency_contact', 'relations', 'emergency_number', 'status', 'employee_type'];
 
     protected $hidden = [];
 
@@ -40,6 +40,12 @@ class Employee extends Model
     {
         return $this->hasMany(Attandance::class, 'employee_id', 'employee_id');
     }
+
+    public function attendanceLogs()
+    {
+        return $this->hasMany(Attandance::class, 'employee_id', 'employee_id');
+    }
+
 
     public function payrolls(): HasMany
     {
@@ -75,6 +81,6 @@ class Employee extends Model
 
     public function division()
     {
-        return $this->belongsTo(Division::class);
+        return $this->belongsTo(Division::class, 'division_id');
     }
 }

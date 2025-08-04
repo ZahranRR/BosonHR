@@ -11,14 +11,14 @@ class Division extends Model
     protected $fillable = [
         'name', 
         'description',
-        'work_start_time',
-        'work_end_time',
         'has_overtime',
+        'hourly_rate',
         'work_days',
     ];
 
     protected $casts = [
         'work_days' => 'array',
+        'hourly_rate' => 'integer',
     ];
 
     public function employees()

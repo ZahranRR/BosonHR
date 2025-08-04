@@ -204,6 +204,7 @@ class EmployeeController extends Controller
                     'starting_date' => 'nullable|date',
                     'interview_by' => 'nullable|string',
                     'current_salary' => 'nullable|string',
+                    'attendance_allowance' => 'nullable|string',
                     'insurance' => 'nullable|boolean',
                     'serious_illness' => 'nullable|string',
                     'hereditary_disease' => 'nullable|string',
@@ -211,6 +212,7 @@ class EmployeeController extends Controller
                     'relations' => 'nullable|in:Parent,Guardian,Husband,Wife,Sibling',
                     'emergency_number' => 'required|numeric',
                     'status' => 'nullable|in:Active,Inactive,Pending,Suspend',
+                    'employee_type' => 'nullable|in:Permanent,Freelance',
                 ]
             );
             Log::info('Validation passed', $validatedData);
@@ -219,6 +221,11 @@ class EmployeeController extends Controller
             if (isset($request->current_salary)) {
                 $validatedData['current_salary'] = (int) str_replace('.', '', $request->current_salary);
                 Log::info('current_salary cleaned', ['current_salary' => $validatedData['current_salary']]);
+            }
+
+            if (isset($request->attendance_allowance)) {
+                $validatedData['attendance_allowance'] = (int) str_replace('.', '', $request->attendance_allowance);
+                Log::info('attendance_allowance cleaned', ['attendance_allowance' => $validatedData['attendance_allowance']]);
             }
 
             // FILE
@@ -366,6 +373,7 @@ class EmployeeController extends Controller
                 'starting_date' => 'nullable|date',
                 'interview_by' => 'nullable|string',
                 'current_salary' => 'nullable|string',
+                'attendance_allowance' => 'nullable|string',
                 'insurance' => 'nullable|boolean',
                 'serious_illness' => 'nullable|string',
                 'hereditary_disease' => 'nullable|string',
@@ -373,6 +381,7 @@ class EmployeeController extends Controller
                 'relations' => 'nullable|in:Parent,Guardian,Husband,Wife,Sibling',
                 'emergency_number' => 'required|numeric',
                 'status' => 'nullable|in:Active,Inactive,Pending,Suspend',
+                'employee_type' => 'nullable|in:Permanent,Freelance',
             ],
             [
                 'identity_number.regex' => 'Identity number must only contain numbers.',
@@ -389,6 +398,10 @@ class EmployeeController extends Controller
         // Menghapus pemisah ribuan dan mengonversi ke integer
         if (isset($request->current_salary)) {
             $validatedData['current_salary'] = (int) str_replace('.', '', $request->input('current_salary'));
+        }
+
+        if (isset($request->attendance_allowance)) {
+            $validatedData['attendance_allowance'] = (int) str_replace('.', '', $request->input('attendance_allowance'));
         }
 
         // Proses penggantian file CV hanya jika ada file CV yang diunggah
