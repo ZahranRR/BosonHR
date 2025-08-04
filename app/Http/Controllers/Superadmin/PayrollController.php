@@ -11,6 +11,7 @@ use App\Models\Payroll;
 use App\Models\SalaryDeduction;
 use App\Models\WorkdaySetting;
 use App\Models\Event;
+use App\Models\Division;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Response;
@@ -29,23 +30,34 @@ class PayrollController extends Controller
     {
         $search = $request->query('search');
         $month = $request->query('month', now()->format('Y-m'));
+        $divisionId = $request->query('division');
 
+        // Ambil daftar division untuk dropdown
+        $divisions = Division::all();
+
+        // Ambil semua employee aktif + relasi yang dibutuhkan
         $employees = Employee::with('division', 'attendanceLogs')
             ->where('status', 'Active')
             ->when($search, function ($query) use ($search) {
                 $query->whereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%$search%"]);
             })
+            ->when($divisionId, function ($query) use ($divisionId) {
+                $query->where('division_id', $divisionId);
+            })
             ->get();
 
+        // Ambil setting jam kerja
         $workdaySetting = WorkdaySetting::first();
         if (!$workdaySetting) {
             return redirect()->route('settings.index')->with('error', 'Workday settings not found.');
         }
 
+        // Ambil setting pemotongan gaji
         $salaryDeduction = SalaryDeduction::first();
         $lateDeduction = $salaryDeduction->late_deduction ?? 0;
         $earlyDeduction = $salaryDeduction->early_deduction ?? 0;
 
+        // Proses payroll untuk semua employee
         $payrolls = $employees->map(function ($employee) use ($month, $workdaySetting, $lateDeduction, $earlyDeduction) {
             if ($employee->employee_type === 'Freelance') {
                 return $this->calculateFreelancePayroll($employee, $month);
@@ -54,70 +66,70 @@ class PayrollController extends Controller
             }
         })->filter();
 
-        return view('Superadmin.payroll.index', compact('payrolls', 'month', 'search'));
+        // Kirim semua data ke view
+        return view('Superadmin.payroll.index', compact('payrolls', 'month', 'search', 'divisions'));
     }
-
-
 
 
     private function calculateFreelancePayroll($employee, $month)
     {
         $hourlyRate = $employee->division->hourly_rate ?? 0;
-    
+
         $logs = $employee->attendanceLogs()
             ->whereMonth('check_in', Carbon::parse($month)->month)
             ->whereYear('check_in', Carbon::parse($month)->year)
             ->get();
-    
+
         $standardIn = '09:00';
         $overtimeStart = '18:30';
         $toleranceMinutes = 15;
-    
+
         $totalNormalHours = 0;
         $totalOvertimeHours = 0;
         $lateCount = 0;
         $uniqueWorkDays = [];
-    
+
         foreach ($logs as $log) {
             if (!$log->check_in || !$log->check_out) continue;
-    
+
             $checkIn = Carbon::parse($log->check_in);
             $checkOut = Carbon::parse($log->check_out);
             $workDate = $checkIn->toDateString();
             $uniqueWorkDays[$workDate] = true;
-    
+
             // Hitung telat
             $isLate = $checkIn->gt($checkIn->copy()->setTimeFromTimeString($standardIn)->addMinutes($toleranceMinutes));
             if ($isLate) $lateCount++;
-    
+
             // Normal hours
             $normalHours = 8;
             if ($isLate) {
                 $normalHours = max(0, $normalHours - 1);
             }
             $totalNormalHours += $normalHours;
-    
+
             // Hitung overtime
             $overtimeThreshold = $checkOut->copy()->startOfDay()->setTimeFromTimeString($overtimeStart);
             if ($checkOut->gt($overtimeThreshold)) {
                 $overtimeMinutes = $overtimeThreshold->diffInMinutes($checkOut);
-                $overtime = ceil($overtimeMinutes / 60); // bulatkan ke atas
+                $overtime = min(2, ceil($overtimeMinutes / 60)); // max 2 jam lembur
             } else {
                 $overtime = 0;
             }
-    
+
+
             $totalOvertimeHours += $overtime;
-    
+
             // Log
             \Log::info("PayrollLog | {$employee->name} | {$workDate} | In: {$checkIn->format('H:i')} | Out: {$checkOut->format('H:i')} | NormalHours: {$normalHours} | Overtime: {$overtime} | Telat: " . ($isLate ? 'Ya' : 'Tidak'));
         }
-    
+
         $baseSalary = $totalNormalHours * $hourlyRate;
         $overtimePay = $totalOvertimeHours * $hourlyRate;
         $totalSalary = $baseSalary + $overtimePay;
-    
+
         \Log::info("Payroll Summary | {$employee->name} | Month: {$month} | WorkDays: " . count($uniqueWorkDays) . " | Total Normal Hours: {$totalNormalHours} | Overtime Hours: {$totalOvertimeHours} | Base Salary: {$baseSalary} | Overtime Pay: {$overtimePay} | Total Salary: {$totalSalary}");
-    
+
         return $this->storePayroll(
             $employee,
             $month,
@@ -131,8 +143,8 @@ class PayrollController extends Controller
             $lateCount
         );
     }
-    
-    
+
+
     private function calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction)
     {
         $recap = AttandanceRecap::where('employee_id', $employee->employee_id)->where('month', $month)->first();
