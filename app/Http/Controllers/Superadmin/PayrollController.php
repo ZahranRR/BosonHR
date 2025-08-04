@@ -102,10 +102,18 @@ class PayrollController extends Controller
             if ($isLate) $lateCount++;
 
             // Normal hours
-            $normalHours = 8;
+            $workDuration = $checkIn->diffInMinutes($checkOut);
+            $workedHours = floor($workDuration / 60);
+            
+            // Batasi maksimal jam kerja normal = 8
+            $normalHours = min($workedHours, 8);
+            
+            // Jika telat, kurangi 1 jam normal (jangan melebihi jam kerja aktual)
             if ($isLate) {
                 $normalHours = max(0, $normalHours - 1);
             }
+            
+
             $totalNormalHours += $normalHours;
 
             // Hitung overtime
