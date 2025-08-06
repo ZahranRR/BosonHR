@@ -59,19 +59,24 @@ class PayrollController extends Controller
 
         // Proses payroll untuk semua employee
         $payrolls = $employees->map(function ($employee) use ($month, $workdaySetting, $lateDeduction, $earlyDeduction) {
+            $existingPayroll = Payroll::where('employee_id', $employee->employee_id)
+                ->where('month', $month)
+                ->first();
+            $cashAdvance = $existingPayroll->cash_advance ?? 0;
+
             if ($employee->employee_type === 'Freelance') {
-                return $this->calculateFreelancePayroll($employee, $month);
+                return $this->calculateFreelancePayroll($employee, $month, $cashAdvance);
             } else {
-                return $this->calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction);
+                return $this->calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction, $cashAdvance);
             }
-        })->filter();
+        })->filter()->values()->all();/////////////////////////////////////////////
 
         // Kirim semua data ke view
         return view('Superadmin.payroll.index', compact('payrolls', 'month', 'search', 'divisions'));
     }
 
 
-    private function calculateFreelancePayroll($employee, $month)
+    private function calculateFreelancePayroll($employee, $month, $cashAdvance)
     {
         $hourlyRate = $employee->division->hourly_rate ?? 0;
 
@@ -104,15 +109,15 @@ class PayrollController extends Controller
             // Normal hours
             $workDuration = $checkIn->diffInMinutes($checkOut);
             $workedHours = floor($workDuration / 60);
-            
+
             // Batasi maksimal jam kerja normal = 8
             $normalHours = min($workedHours, 8);
-            
+
             // Jika telat, kurangi 1 jam normal (jangan melebihi jam kerja aktual)
             if ($isLate) {
                 $normalHours = max(0, $normalHours - 1);
             }
-            
+
 
             $totalNormalHours += $normalHours;
 
@@ -134,9 +139,14 @@ class PayrollController extends Controller
 
         $baseSalary = $totalNormalHours * $hourlyRate;
         $overtimePay = $totalOvertimeHours * $hourlyRate;
-        $totalSalary = $baseSalary + $overtimePay;
+        $totalSalary = $baseSalary + $overtimePay - $cashAdvance;
 
         \Log::info("Payroll Summary | {$employee->name} | Month: {$month} | WorkDays: " . count($uniqueWorkDays) . " | Total Normal Hours: {$totalNormalHours} | Overtime Hours: {$totalOvertimeHours} | Base Salary: {$baseSalary} | Overtime Pay: {$overtimePay} | Total Salary: {$totalSalary}");
+
+        $existing = Payroll::where('employee_id', $employee->employee_id) //tadinya $employee->employee_id
+            ->where('month', $month)
+            ->first();
+        $cashAdvance = $existing->cash_advance ?? 0;
 
         return $this->storePayroll(
             $employee,
@@ -148,12 +158,13 @@ class PayrollController extends Controller
             0, // Absent
             0, // Early checkout
             count($uniqueWorkDays), // Effective days
-            $lateCount
+            $lateCount,
+            $cashAdvance
         );
     }
 
 
-    private function calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction)
+    private function calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction, $cashAdvance)
     {
         $recap = AttandanceRecap::where('employee_id', $employee->employee_id)->where('month', $month)->first();
 
@@ -174,16 +185,32 @@ class PayrollController extends Controller
 
         $totalDeductions = ($totalLateCheckIn * $lateDeduction) + ($totalEarlyCheckOut * $earlyDeduction);
         $baseSalary = $totalDaysWorked * $dailySalary;
-        $totalSalary = $baseSalary - $totalDeductions + $overtimePay;
+        $totalSalary = $baseSalary - $totalDeductions + $overtimePay - $cashAdvance;
 
-        return $this->storePayroll($employee, $month, $totalSalary, $baseSalary, $overtimePay, $totalDaysWorked, $totalAbsent, $totalEarlyCheckOut, $monthlyWorkdays, $totalLateCheckIn);
+        $existing = Payroll::where('employee_id', $employee->employee_id)
+            ->where('month', $month)
+            ->first();
+        $cashAdvance = $existing->cash_advance ?? 0;
+
+        return $this->storePayroll(
+            $employee,
+            $month,
+            $totalSalary,
+            $baseSalary,
+            $overtimePay,
+            $totalDaysWorked,
+            $totalAbsent,
+            $totalEarlyCheckOut,
+            $monthlyWorkdays,
+            $totalLateCheckIn,
+            $cashAdvance
+        );
     }
-
-    private function storePayroll($employee, $month, $totalSalary, $baseSalary, $overtimePay, $totalDaysWorked, $totalAbsent, $totalEarlyCheckOut, $effectiveWorkDays, $totalLateCheckIn)
+    private function storePayroll($employee, $month, $totalSalary, $baseSalary, $overtimePay, $totalDaysWorked, $totalAbsent, $totalEarlyCheckOut, $effectiveWorkDays, $totalLateCheckIn, $cashAdvance)
     {
         $isFreelance = $employee->employee_type === 'Freelance';
 
-        Payroll::updateOrCreate(
+        $payroll = Payroll::updateOrCreate(
             ['employee_id' => $employee->employee_id, 'month' => $month],
             [
                 'employee_name' => $employee->first_name . ' ' . $employee->last_name,
@@ -195,12 +222,14 @@ class PayrollController extends Controller
                 'total_early_check_out' => $totalEarlyCheckOut,
                 'effective_work_days' => $effectiveWorkDays,
                 'overtime_pay' => $overtimePay,
+                'cash_advance' => $cashAdvance,
                 'total_salary' => $totalSalary,
                 'status' => 'Pending',
             ]
         );
 
         return [
+            'payroll_id' => $payroll->payroll_id,
             'id' => $employee->employee_id,
             'employee_name' => $employee->first_name . ' ' . $employee->last_name,
             'current_salary' => $isFreelance ? 0 : ($employee->current_salary ?? 0),
@@ -211,11 +240,48 @@ class PayrollController extends Controller
             'total_early_check_out' => $totalEarlyCheckOut,
             'effective_work_days' => $effectiveWorkDays,
             'overtime_pay' => $overtimePay,
+            'cash_advance' => $cashAdvance,
             'total_salary' => $totalSalary,
             'status' => 'Pending',
         ];
     }
 
+    public function updateCashAdvance(Request $request, $id)
+    {
+        try {
+            $request->validate([
+                'cash_advance' => 'required|numeric|min:0',
+            ]);
+
+            $payroll = Payroll::findOrFail($id);
+            $oldValue = $payroll->cash_advance;
+
+            $payroll->cash_advance = $request->cash_advance;
+            $payroll->save();
+
+            Log::info("Cash Advance updated", [
+                'payroll_id' => $id,
+                'old_value' => $oldValue,
+                'new_value' => $payroll->cash_advance,
+                'user_id' => auth()->id(), // jika pakai auth
+            ]);
+
+            return response()->json([
+                'message' => 'Cash advance updated successfully.',
+                'cash_advance' => number_format($payroll->cash_advance, 0, ',', '.')
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to update cash advance', [
+                'payroll_id' => $id,
+                'error' => $e->getMessage(),
+                'user_id' => auth()->id(), // optional
+            ]);
+
+            return response()->json([
+                'message' => 'Terjadi kesalahan saat menyimpan kasbon.',
+            ], 500);
+        }
+    }
 
     private function calculateWorkdaysForMonth(array $effectiveDays, string $month): int
     {

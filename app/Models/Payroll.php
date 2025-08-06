@@ -23,6 +23,7 @@ class Payroll extends Model
         'effective_work_days',
         'current_salary',
         'overtime_pay',
+        'cash_advance',
         'total_salary',
         'status',
 
