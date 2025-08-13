@@ -75,93 +75,105 @@ class PayrollController extends Controller
         return view('Superadmin.payroll.index', compact('payrolls', 'month', 'search', 'divisions'));
     }
 
-
-    private function calculateFreelancePayroll($employee, $month, $cashAdvance)
+    
+    private function calculateFreelancePayroll($employee, $month, $cashAdvance) 
     {
-        $hourlyRate = $employee->division->hourly_rate ?? 0;
-
-        $logs = $employee->attendanceLogs()
-            ->whereMonth('check_in', Carbon::parse($month)->month)
-            ->whereYear('check_in', Carbon::parse($month)->year)
-            ->get();
-
-        $standardIn = '09:00';
-        $overtimeStart = '18:30';
-        $toleranceMinutes = 15;
-
-        $totalNormalHours = 0;
-        $totalOvertimeHours = 0;
-        $lateCount = 0;
-        $uniqueWorkDays = [];
-
-        foreach ($logs as $log) {
-            if (!$log->check_in || !$log->check_out) continue;
-
-            $checkIn = Carbon::parse($log->check_in);
-            $checkOut = Carbon::parse($log->check_out);
-            $workDate = $checkIn->toDateString();
-            $uniqueWorkDays[$workDate] = true;
-
-            // Hitung telat
-            $isLate = $checkIn->gt($checkIn->copy()->setTimeFromTimeString($standardIn)->addMinutes($toleranceMinutes));
-            if ($isLate) $lateCount++;
-
-            // Normal hours
-            $workDuration = $checkIn->diffInMinutes($checkOut);
-            $workedHours = floor($workDuration / 60);
-
-            // Batasi maksimal jam kerja normal = 8
-            $normalHours = min($workedHours, 8);
-
-            // Jika telat, kurangi 1 jam normal (jangan melebihi jam kerja aktual)
-            if ($isLate) {
-                $normalHours = max(0, $normalHours - 1);
+        try {
+            $hourlyRate = $employee->division->hourly_rate ?? 0;
+    
+            // Ambil work_days dari division
+            $workDays = is_string($employee->division->work_days)
+                ? json_decode($employee->division->work_days, true) ?? []
+                : ($employee->division->work_days ?? []);
+    
+            // Hitung hari kerja seharusnya di bulan ini
+            $plannedWorkDays = $this->calculateWorkdaysForMonth($workDays, $month);
+    
+            $logs = $employee->attendanceLogs()
+                ->whereMonth('check_in', Carbon::parse($month)->month)
+                ->whereYear('check_in', Carbon::parse($month)->year)
+                ->get();
+    
+            $standardIn = '09:00';
+            $overtimeStart = '18:30';
+            $toleranceMinutes = 15;
+    
+            $totalNormalHours = 0;
+            $totalOvertimeHours = 0;
+            $lateCount = 0;
+            $uniqueWorkDays = [];
+    
+            foreach ($logs as $log) {
+                if (!$log->check_in || !$log->check_out) continue;
+    
+                $checkIn = Carbon::parse($log->check_in);
+                $checkOut = Carbon::parse($log->check_out);
+                $workDate = $checkIn->toDateString();
+                $uniqueWorkDays[$workDate] = true;
+    
+                // Hitung telat
+                $isLate = $checkIn->gt($checkIn->copy()->setTimeFromTimeString($standardIn)->addMinutes($toleranceMinutes));
+                if ($isLate) $lateCount++;
+    
+                // Normal hours
+                $workDuration = $checkIn->diffInMinutes($checkOut);
+                $workedHours = floor($workDuration / 60);
+                $normalHours = min($workedHours, 8);
+    
+                if ($isLate) {
+                    $normalHours = max(0, $normalHours - 1);
+                }
+    
+                $totalNormalHours += $normalHours;
+    
+                // Overtime
+                $overtimeThreshold = $checkOut->copy()->startOfDay()->setTimeFromTimeString($overtimeStart);
+                if ($checkOut->gt($overtimeThreshold)) {
+                    $overtimeMinutes = $overtimeThreshold->diffInMinutes($checkOut);
+                    $overtime = min(2, ceil($overtimeMinutes / 60)); 
+                } else {
+                    $overtime = 0;
+                }
+    
+                $totalOvertimeHours += $overtime;
+    
+                // Log harian
+                \Log::info("PayrollLog | {$employee->first_name} {$employee->last_name} | {$workDate} | In: {$checkIn->format('H:i')} | Out: {$checkOut->format('H:i')} | NormalHours: {$normalHours} | Overtime: {$overtime} | Telat: " . ($isLate ? 'Ya' : 'Tidak'));
             }
-
-
-            $totalNormalHours += $normalHours;
-
-            // Hitung overtime
-            $overtimeThreshold = $checkOut->copy()->startOfDay()->setTimeFromTimeString($overtimeStart);
-            if ($checkOut->gt($overtimeThreshold)) {
-                $overtimeMinutes = $overtimeThreshold->diffInMinutes($checkOut);
-                $overtime = min(2, ceil($overtimeMinutes / 60)); // max 2 jam lembur
-            } else {
-                $overtime = 0;
-            }
-
-
-            $totalOvertimeHours += $overtime;
-
-            // Log
-            \Log::info("PayrollLog | {$employee->name} | {$workDate} | In: {$checkIn->format('H:i')} | Out: {$checkOut->format('H:i')} | NormalHours: {$normalHours} | Overtime: {$overtime} | Telat: " . ($isLate ? 'Ya' : 'Tidak'));
+    
+            // Hitung absent
+            $workedDays = count($uniqueWorkDays);
+            $absentDays = max(0, $plannedWorkDays - $workedDays);
+    
+            $baseSalary = $totalNormalHours * $hourlyRate;
+            $overtimePay = $totalOvertimeHours * $hourlyRate;
+            $totalSalary = $baseSalary + $overtimePay - $cashAdvance;
+    
+            \Log::info("Payroll Summary | {$employee->first_name} {$employee->last_name} | Month: {$month} | Planned WorkDays: {$plannedWorkDays} | Actual WorkDays: {$workedDays} | Absent: {$absentDays} | Total Normal Hours: {$totalNormalHours} | Overtime Hours: {$totalOvertimeHours} | Base Salary: {$baseSalary} | Overtime Pay: {$overtimePay} | Total Salary: {$totalSalary}");
+    
+            $existing = Payroll::where('employee_id', $employee->employee_id)
+                ->where('month', $month)
+                ->first();
+            $cashAdvance = $existing->cash_advance ?? 0;
+    
+            return $this->storePayroll(
+                $employee,
+                $month,
+                $totalSalary,
+                $baseSalary,
+                $overtimePay,
+                $workedDays,
+                $absentDays, // sudah benar absent
+                0, 
+                $workedDays,
+                $lateCount,
+                $cashAdvance
+            );
+        } catch (\Exception $e) {
+            \Log::error("Error Payroll Freelance | Employee: {$employee->employee_id} | {$employee->first_name} {$employee->last_name} | Month: {$month} | Msg: {$e->getMessage()} | Trace: {$e->getTraceAsString()}");
+            return null;
         }
-
-        $baseSalary = $totalNormalHours * $hourlyRate;
-        $overtimePay = $totalOvertimeHours * $hourlyRate;
-        $totalSalary = $baseSalary + $overtimePay - $cashAdvance;
-
-        \Log::info("Payroll Summary | {$employee->name} | Month: {$month} | WorkDays: " . count($uniqueWorkDays) . " | Total Normal Hours: {$totalNormalHours} | Overtime Hours: {$totalOvertimeHours} | Base Salary: {$baseSalary} | Overtime Pay: {$overtimePay} | Total Salary: {$totalSalary}");
-
-        $existing = Payroll::where('employee_id', $employee->employee_id) //tadinya $employee->employee_id
-            ->where('month', $month)
-            ->first();
-        $cashAdvance = $existing->cash_advance ?? 0;
-
-        return $this->storePayroll(
-            $employee,
-            $month,
-            $totalSalary,
-            $baseSalary,
-            $overtimePay,
-            count($uniqueWorkDays),
-            0, // Absent
-            0, // Early checkout
-            count($uniqueWorkDays), // Effective days
-            $lateCount,
-            $cashAdvance
-        );
-    }
+    }    
 
 
     private function calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction, $cashAdvance)
