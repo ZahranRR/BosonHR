@@ -42,6 +42,8 @@ class DivisionController extends Controller
             'hourly_rate' => 'nullable|string',
             'work_days' => 'required|array',
             'work_days.*' => 'in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
+            'check_in_time' => 'nullable|date_format:H:i',
+            'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
         ]);
         try {
             Division::create($request->all());
@@ -66,6 +68,8 @@ class DivisionController extends Controller
             'hourly_rate' => 'nullable|string',
             'work_days' => 'required|array',
             'work_days.*' => 'in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
+            'check_in_time' => 'nullable|date_format:H:i',
+            'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
         ]);
         try {
             $division->update($request->all());

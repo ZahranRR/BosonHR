@@ -32,10 +32,8 @@ class PayrollController extends Controller
         $month = $request->query('month', now()->format('Y-m'));
         $divisionId = $request->query('division');
 
-        // Ambil daftar division untuk dropdown
         $divisions = Division::all();
 
-        // Ambil semua employee aktif + relasi yang dibutuhkan
         $employees = Employee::with('division', 'attendanceLogs')
             ->where('status', 'Active')
             ->when($search, function ($query) use ($search) {
@@ -46,18 +44,15 @@ class PayrollController extends Controller
             })
             ->get();
 
-        // Ambil setting jam kerja
         $workdaySetting = WorkdaySetting::first();
         if (!$workdaySetting) {
             return redirect()->route('settings.index')->with('error', 'Workday settings not found.');
         }
 
-        // Ambil setting pemotongan gaji
         $salaryDeduction = SalaryDeduction::first();
         $lateDeduction = $salaryDeduction->late_deduction ?? 0;
         $earlyDeduction = $salaryDeduction->early_deduction ?? 0;
 
-        // Proses payroll untuk semua employee
         $payrolls = $employees->map(function ($employee) use ($month, $workdaySetting, $lateDeduction, $earlyDeduction) {
             $existingPayroll = Payroll::where('employee_id', $employee->employee_id)
                 ->where('month', $month)
@@ -69,93 +64,96 @@ class PayrollController extends Controller
             } else {
                 return $this->calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction, $cashAdvance);
             }
-        })->filter()->values()->all();/////////////////////////////////////////////
+        })->filter()->values()->all();
 
-        // Kirim semua data ke view
         return view('Superadmin.payroll.index', compact('payrolls', 'month', 'search', 'divisions'));
     }
 
-    
-    private function calculateFreelancePayroll($employee, $month, $cashAdvance) 
+    private function calculateFreelancePayroll($employee, $month, $cashAdvance)
     {
         try {
             $hourlyRate = $employee->division->hourly_rate ?? 0;
-    
-            // Ambil work_days dari division
-            $workDays = is_string($employee->division->work_days)
-                ? json_decode($employee->division->work_days, true) ?? []
-                : ($employee->division->work_days ?? []);
-    
-            // Hitung hari kerja seharusnya di bulan ini
-            $plannedWorkDays = $this->calculateWorkdaysForMonth($workDays, $month);
-    
+
+            $workDays = [];
+            if ($employee->division && $employee->division->work_days) {
+                if (is_string($employee->division->work_days)) {
+                    $decoded = json_decode($employee->division->work_days, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $workDays = $decoded;
+                    } else {
+                        $workDays = explode(',', $employee->division->work_days);
+                    }
+                } elseif (is_array($employee->division->work_days)) {
+                    $workDays = $employee->division->work_days;
+                }
+            }
+
+            $plannedWorkDays = $this->calculateWorkdaysForMonth($workDays, $month, $employee);
+
             $logs = $employee->attendanceLogs()
                 ->whereMonth('check_in', Carbon::parse($month)->month)
                 ->whereYear('check_in', Carbon::parse($month)->year)
                 ->get();
-    
-            $standardIn = '09:00';
-            $overtimeStart = '18:30';
+
+            $divisionIn  = $employee->division->check_in_time ?? '09:00:00';
+            $divisionOut = $employee->division->check_out_time ?? '18:00:00';
+
+            $standardIn  = Carbon::createFromFormat('H:i:s', $divisionIn)->format('H:i:s');
+            $overtimeStart = Carbon::createFromFormat('H:i:s', $divisionOut)->addMinutes(30)->format('H:i:s'); // lembur dihitung 30 menit setelah jam pulang
             $toleranceMinutes = 15;
-    
+
             $totalNormalHours = 0;
             $totalOvertimeHours = 0;
             $lateCount = 0;
             $uniqueWorkDays = [];
-    
+
             foreach ($logs as $log) {
                 if (!$log->check_in || !$log->check_out) continue;
-    
+
                 $checkIn = Carbon::parse($log->check_in);
                 $checkOut = Carbon::parse($log->check_out);
                 $workDate = $checkIn->toDateString();
                 $uniqueWorkDays[$workDate] = true;
-    
-                // Hitung telat
+
                 $isLate = $checkIn->gt($checkIn->copy()->setTimeFromTimeString($standardIn)->addMinutes($toleranceMinutes));
                 if ($isLate) $lateCount++;
-    
-                // Normal hours
+
                 $workDuration = $checkIn->diffInMinutes($checkOut);
                 $workedHours = floor($workDuration / 60);
                 $normalHours = min($workedHours, 8);
-    
+
                 if ($isLate) {
                     $normalHours = max(0, $normalHours - 1);
                 }
-    
+
                 $totalNormalHours += $normalHours;
-    
-                // Overtime
+
                 $overtimeThreshold = $checkOut->copy()->startOfDay()->setTimeFromTimeString($overtimeStart);
+                $overtime = 0;
                 if ($checkOut->gt($overtimeThreshold)) {
                     $overtimeMinutes = $overtimeThreshold->diffInMinutes($checkOut);
-                    $overtime = min(2, ceil($overtimeMinutes / 60)); 
-                } else {
-                    $overtime = 0;
+                    $overtime = min(2, ceil($overtimeMinutes / 60));
                 }
-    
+
                 $totalOvertimeHours += $overtime;
-    
-                // Log harian
+
                 \Log::info("PayrollLog | {$employee->first_name} {$employee->last_name} | {$workDate} | In: {$checkIn->format('H:i')} | Out: {$checkOut->format('H:i')} | NormalHours: {$normalHours} | Overtime: {$overtime} | Telat: " . ($isLate ? 'Ya' : 'Tidak'));
             }
-    
-            // Hitung absent
+
             $workedDays = count($uniqueWorkDays);
             $absentDays = max(0, $plannedWorkDays - $workedDays);
-    
+
             $baseSalary = $totalNormalHours * $hourlyRate;
             $overtimePay = $totalOvertimeHours * $hourlyRate;
             $totalSalary = $baseSalary + $overtimePay - $cashAdvance;
-    
+
             \Log::info("Payroll Summary | {$employee->first_name} {$employee->last_name} | Month: {$month} | Planned WorkDays: {$plannedWorkDays} | Actual WorkDays: {$workedDays} | Absent: {$absentDays} | Total Normal Hours: {$totalNormalHours} | Overtime Hours: {$totalOvertimeHours} | Base Salary: {$baseSalary} | Overtime Pay: {$overtimePay} | Total Salary: {$totalSalary}");
-    
+
             $existing = Payroll::where('employee_id', $employee->employee_id)
                 ->where('month', $month)
                 ->first();
             $cashAdvance = $existing->cash_advance ?? 0;
-    
+
             return $this->storePayroll(
                 $employee,
                 $month,
@@ -163,8 +161,8 @@ class PayrollController extends Controller
                 $baseSalary,
                 $overtimePay,
                 $workedDays,
-                $absentDays, // sudah benar absent
-                0, 
+                $absentDays,
+                0,
                 $workedDays,
                 $lateCount,
                 $cashAdvance
@@ -173,51 +171,111 @@ class PayrollController extends Controller
             \Log::error("Error Payroll Freelance | Employee: {$employee->employee_id} | {$employee->first_name} {$employee->last_name} | Month: {$month} | Msg: {$e->getMessage()} | Trace: {$e->getTraceAsString()}");
             return null;
         }
-    }    
-
+    }
 
     private function calculatePermanentPayroll($employee, $month, $workdaySetting, $lateDeduction, $earlyDeduction, $cashAdvance)
     {
-        $recap = AttandanceRecap::where('employee_id', $employee->employee_id)->where('month', $month)->first();
+        try {
+            $recap = AttandanceRecap::where('employee_id', $employee->employee_id)
+                ->where('month', $month)
+                ->first();
 
-        $totalDaysWorked = $recap->total_present ?? 0;
-        $totalLateCheckIn = $recap->total_late ?? 0;
-        $totalEarlyCheckOut = $recap->total_early ?? 0;
-        $totalAbsent = $recap->total_absent ?? 0;
+            $totalDaysWorked = $recap->total_present ?? 0;
+            $totalLateCheckIn = $recap->total_late ?? 0;
+            $totalEarlyCheckOut = $recap->total_early ?? 0;
 
-        $monthlyWorkdays = $this->calculateWorkdaysForMonth($workdaySetting->effective_days ?? [], $month);
+            $divisionWorkDays = [];
+            if ($employee->division && $employee->division->work_days) {
+                if (is_string($employee->division->work_days)) {
+                    $decoded = json_decode($employee->division->work_days, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $divisionWorkDays = $decoded;
+                    } else {
+                        $divisionWorkDays = explode(',', $employee->division->work_days);
+                    }
+                } elseif (is_array($employee->division->work_days)) {
+                    $divisionWorkDays = $employee->division->work_days;
+                }
+            }
 
-        $dailySalary = $monthlyWorkdays > 0 ? $employee->current_salary / $monthlyWorkdays : 0;
-        $workDurationInHours = Carbon::parse($employee->check_out_time)->diffInHours(Carbon::parse($employee->check_in_time));
-        $hourlyRate = $dailySalary / ($workDurationInHours ?: 1);
+            if (empty($divisionWorkDays)) {
+                $divisionWorkDays = $workdaySetting->effective_days ?? [];
+            }
 
-        $overtimeData = Overtime::where('employee_id', $employee->employee_id)->where('status', 'approved')->get();
-        $totalOvertimeHours = $overtimeData->sum('duration');
-        $overtimePay = $totalOvertimeHours * $hourlyRate;
+            $monthlyWorkdays = $this->calculateWorkdaysForMonth($divisionWorkDays, $month, $employee);
 
-        $totalDeductions = ($totalLateCheckIn * $lateDeduction) + ($totalEarlyCheckOut * $earlyDeduction);
-        $baseSalary = $totalDaysWorked * $dailySalary;
-        $totalSalary = $baseSalary - $totalDeductions + $overtimePay - $cashAdvance;
+            $totalAbsent = max(0, $monthlyWorkdays - $totalDaysWorked);
 
-        $existing = Payroll::where('employee_id', $employee->employee_id)
-            ->where('month', $month)
-            ->first();
-        $cashAdvance = $existing->cash_advance ?? 0;
+            $monthlyWorkdays = $this->calculateWorkdaysForMonth($divisionWorkDays, $month, $employee);
 
-        return $this->storePayroll(
-            $employee,
-            $month,
-            $totalSalary,
-            $baseSalary,
-            $overtimePay,
-            $totalDaysWorked,
-            $totalAbsent,
-            $totalEarlyCheckOut,
-            $monthlyWorkdays,
-            $totalLateCheckIn,
-            $cashAdvance
-        );
+            $dailySalary = $monthlyWorkdays > 0 ? $employee->current_salary / $monthlyWorkdays : 0;
+            $divisionIn  = $employee->division->check_in_time ?? '09:00:00';
+            $divisionOut = $employee->division->check_out_time ?? '18:00:00';
+
+            $workDurationInHours = Carbon::createFromFormat('H:i:s', $divisionOut)
+                ->diffInHours(Carbon::createFromFormat('H:i:s', $divisionIn));
+
+            $hourlyRate = $dailySalary / ($workDurationInHours ?: 1);
+
+            $overtimeData = Overtime::where('employee_id', $employee->employee_id)
+                ->where('status', 'approved')
+                ->get();
+            $totalOvertimeHours = $overtimeData->sum('duration');
+            $overtimePay = $totalOvertimeHours * $hourlyRate;
+
+            $totalDeductions = ($totalLateCheckIn * $lateDeduction) + ($totalEarlyCheckOut * $earlyDeduction);
+            $baseSalary = $employee->current_salary ?? 0;
+            $totalSalary = $baseSalary - $totalDeductions + $overtimePay - $cashAdvance;
+
+            $existing = Payroll::where('employee_id', $employee->employee_id)
+                ->where('month', $month)
+                ->first();
+            $cashAdvance = $existing->cash_advance ?? 0;
+
+            $divisionName = strtolower((string) optional($employee->division)->name);
+            if (in_array($divisionName, ['supir', 'kenek', 'helper', 'teknisi ac'])) {
+                $weeklyData = $this->calculateWeeklyWorkdays($employee, $divisionWorkDays, $month);
+
+                $attendanceAllowance = $employee->attendance_allowance ?? 0;
+                if ($attendanceAllowance > 0) {
+                    $attendanceDeduction = $this->calculateAttendanceAllowance(
+                        $employee,
+                        $weeklyData,
+                        $attendanceAllowance
+                    );
+
+                    // allowance bersih = allowance - potongan
+                    $finalAllowance = $attendanceAllowance - $attendanceDeduction;
+
+                    // tambahkan ke totalSalary
+                    $totalSalary += $finalAllowance;
+
+                    \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | Allowance: {$attendanceAllowance} | Deduction: {$attendanceDeduction} | Final Allowance: {$finalAllowance}");
+                }
+            }
+
+            \Log::info("Payroll Permanent Summary | {$employee->first_name} {$employee->last_name} | Month: {$month} | Workdays: {$monthlyWorkdays} | Worked: {$totalDaysWorked} | Absent: {$totalAbsent} | Base: {$baseSalary} | OT Pay: {$overtimePay} | Total: {$totalSalary}");
+
+            return $this->storePayroll(
+                $employee,
+                $month,
+                $totalSalary,
+                $baseSalary,
+                $overtimePay,
+                $totalDaysWorked,
+                $totalAbsent,
+                $totalEarlyCheckOut,
+                $monthlyWorkdays,
+                $totalLateCheckIn,
+                $cashAdvance
+            );
+        } catch (\Exception $e) {
+            \Log::error("Payroll Permanent ERROR | Employee ID: {$employee->employee_id} | Name: {$employee->first_name} {$employee->last_name} | Month: {$month} | Error: {$e->getMessage()} | File: {$e->getFile()} | Line: {$e->getLine()}");
+            \Log::error($e->getTraceAsString());
+            return null;
+        }
     }
+
     private function storePayroll($employee, $month, $totalSalary, $baseSalary, $overtimePay, $totalDaysWorked, $totalAbsent, $totalEarlyCheckOut, $effectiveWorkDays, $totalLateCheckIn, $cashAdvance)
     {
         $isFreelance = $employee->employee_type === 'Freelance';
@@ -257,66 +315,216 @@ class PayrollController extends Controller
             'status' => 'Pending',
         ];
     }
-
-    public function updateCashAdvance(Request $request, $id)
-    {
-        try {
-            $request->validate([
-                'cash_advance' => 'required|numeric|min:0',
-            ]);
-
-            $payroll = Payroll::findOrFail($id);
-            $oldValue = $payroll->cash_advance;
-
-            $payroll->cash_advance = $request->cash_advance;
-            $payroll->save();
-
-            Log::info("Cash Advance updated", [
-                'payroll_id' => $id,
-                'old_value' => $oldValue,
-                'new_value' => $payroll->cash_advance,
-                'user_id' => auth()->id(), // jika pakai auth
-            ]);
-
-            return response()->json([
-                'message' => 'Cash advance updated successfully.',
-                'cash_advance' => number_format($payroll->cash_advance, 0, ',', '.')
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to update cash advance', [
-                'payroll_id' => $id,
-                'error' => $e->getMessage(),
-                'user_id' => auth()->id(), // optional
-            ]);
-
-            return response()->json([
-                'message' => 'Terjadi kesalahan saat menyimpan kasbon.',
-            ], 500);
-        }
-    }
-
-    private function calculateWorkdaysForMonth(array $effectiveDays, string $month): int
+    private function calculateWorkdaysForMonth(array $effectiveDays, string $month, $employee = null): int
     {
         [$year, $monthNumber] = explode('-', $month);
-
         $startDate = Carbon::create($year, $monthNumber, 1)->startOfMonth();
-        $endDate = Carbon::create($year, $monthNumber, 1)->endOfMonth();
-
+        $endDate   = Carbon::create($year, $monthNumber, 1)->endOfMonth();
+    
+        // Ambil libur nasional
         $holidayDates = Event::where('category', 'danger')
             ->whereBetween('start_date', [$startDate, $endDate])
             ->get()
-            ->flatMap(function ($event) {
-                return CarbonPeriod::create($event->start_date, $event->end_date)->toArray();
-            })
+            ->flatMap(fn($event) => CarbonPeriod::create($event->start_date, $event->end_date)->toArray())
+            ->map(fn($date) => $date->format('Y-m-d'))
+            ->unique()
+            ->toArray();
+    
+        $period = CarbonPeriod::create($startDate, $endDate);
+        $division = strtolower((string) optional($employee->division)->name);
+    
+        // --- Precompute khusus Kasir: 2 weekday pertama libur ---
+        $kasirExtraOff = [];
+        if ($division === 'kasir') {
+            $kasirExtraOff = collect(CarbonPeriod::create($startDate, $endDate))
+                ->filter(fn($d) => in_array($d->format('l'), ['Monday','Tuesday','Wednesday','Thursday','Friday']))
+                ->take(2)
+                ->map(fn($d) => $d->format('Y-m-d'))
+                ->toArray();
+        }
+    
+        $workdays = collect($period)->filter(function ($date) use ($effectiveDays, $holidayDates, $employee, $division, $kasirExtraOff) {
+            $dayName = $date->format('l');
+            $dateStr = $date->format('Y-m-d');
+    
+            // Log awal
+            \Log::debug("[CHECK-DIVISION] {$employee->first_name} {$employee->last_name} | Division: {$division} | Day: {$dayName} | Date: {$dateStr}");
+    
+            // Division khusus: tambahkan Sunday kalau perlu
+            if (in_array($division, ['supir', 'teknisi ac', 'kenek', 'helper']) && !in_array('Sunday', $effectiveDays)) {
+                $effectiveDays[] = 'Sunday';
+            }
+    
+            // Base workday check
+            $isWorkday = in_array($dayName, $effectiveDays) && !in_array($dateStr, $holidayDates);
+    
+            if (!$isWorkday && in_array($dateStr, $holidayDates)) {
+                \Log::debug("[DEBUG] Skip National Holiday: {$dateStr} ({$dayName})");
+            }
+    
+            // --- Supir & Teknisi AC: skip Minggu genap ---
+            if ($isWorkday && in_array($division, ['supir', 'teknisi ac'])) {
+                if ($dayName === 'Sunday' && $date->weekOfMonth % 2 == 0) {
+                    \Log::debug("[DEBUG] Skip Sunday Genap ({$division}): {$dateStr}");
+                    $isWorkday = false;
+                }
+            }
+    
+            // --- Kenek & Helper: skip Minggu terakhir ---
+            if ($isWorkday && in_array($division, ['kenek', 'helper'])) {
+                if ($dayName === 'Sunday') {
+                    $lastSunday = Carbon::create($date->year, $date->month, 1)
+                        ->endOfMonth()
+                        ->previous('Sunday')
+                        ->format('Y-m-d');
+                    if ($dateStr === $lastSunday) {
+                        \Log::debug("[DEBUG] Skip Last Sunday ({$division}): {$dateStr}");
+                        $isWorkday = false;
+                    }
+                }
+            }
+    
+            // --- Kasir: 2 weekday libur tiap bulan ---
+            if ($isWorkday && $division === 'kasir' && in_array($dateStr, $kasirExtraOff)) {
+                \Log::debug("[DEBUG] Kasir extra weekday off: {$dateStr}");
+                $isWorkday = false;
+            }
+    
+            if ($isWorkday) {
+                \Log::debug("[DEBUG] Workday: {$dateStr} ({$dayName})");
+            }
+    
+            return $isWorkday;
+        });
+    
+        return $workdays->count();
+    }
+    
+
+
+    private function calculateWeeklyWorkdays($employee, array $effectiveDays, string $month): array
+    {
+        [$year, $monthNumber] = explode('-', $month);
+        $startDate = Carbon::create($year, $monthNumber, 1)->startOfMonth();
+        $endDate   = Carbon::create($year, $monthNumber, 1)->endOfMonth();
+
+        // Ambil tanggal libur nasional
+        $holidayDates = Event::where('category', 'danger')
+            ->whereBetween('start_date', [$startDate, $endDate])
+            ->get()
+            ->flatMap(fn($event) => CarbonPeriod::create($event->start_date, $event->end_date)->toArray())
             ->map(fn($date) => $date->format('Y-m-d'))
             ->unique()
             ->toArray();
 
-        $period = CarbonPeriod::create($startDate, $endDate);
-        $workdays = collect($period)->filter(function ($date) use ($effectiveDays, $holidayDates) {
-            return in_array($date->format('l'), $effectiveDays) && !in_array($date->format('Y-m-d'), $holidayDates);
-        });
+        // Ambil absensi pegawai
+        $attendances = $employee->attendanceLogs()
+            ->whereMonth('check_in', $monthNumber)
+            ->whereYear('check_in', $year)
+            ->get()
+            ->groupBy(fn($log) => Carbon::parse($log->check_in)->format('Y-m-d'));
 
-        return $workdays->count();
+        $weeklyData = [];
+        $period = CarbonPeriod::create($startDate, $endDate);
+        $division = strtolower((string) optional($employee->division)->name);
+
+        foreach ($period as $date) {
+            $dayName = $date->format('l');
+            $weekNum = $date->weekOfMonth;
+            $dateStr = $date->format('Y-m-d');
+
+            // cek hari kerja
+            if (!in_array($dayName, $effectiveDays)) continue;
+            if (in_array($dateStr, $holidayDates)) continue;
+
+            // Supir & Teknisi AC → skip Minggu genap
+            if (in_array($division, ['supir', 'teknisi ac']) && $dayName === 'Sunday' && $weekNum % 2 === 0) {
+                \Log::debug("[SKIP] {$employee->first_name} {$employee->last_name} skip Sunday genap {$dateStr}");
+                continue;
+            }
+
+            // Kenek & Helper → skip Minggu terakhir
+            if (in_array($division, ['kenek', 'helper']) && $dayName === 'Sunday') {
+                $lastSunday = Carbon::create($date->year, $date->month, 1)
+                    ->endOfMonth()
+                    ->previous('Sunday')
+                    ->format('Y-m-d');
+                if ($dateStr === $lastSunday) {
+                    \Log::debug("[SKIP] {$employee->first_name} {$employee->last_name} skip last Sunday {$dateStr}");
+                    continue; // ❌ jangan masukkan sama sekali
+                }
+            }
+
+            // Tentukan hadir/tidak hadir
+            $attended = isset($attendances[$dateStr]);
+            $weeklyData[$weekNum][$dayName] = $attended;
+
+            \Log::debug("[WeeklyData] {$employee->first_name} {$employee->last_name} | {$dateStr} ({$dayName}) | Week {$weekNum} | Attended: " . ($attended ? 'Yes' : 'No'));
+        }
+
+        return $weeklyData;
+    }
+
+
+    private function calculateAttendanceAllowance($employee, $weeklyData, $baseAllowance)
+    {
+        // Bagi 4 minggu @ 50k, AllFull 100k (untuk baseAllowance 300k)
+        $weekShare = $baseAllowance / 6; // contoh 50k
+        $shares = [
+            1 => $weekShare,
+            2 => $weekShare,
+            3 => $weekShare,
+            4 => $weekShare,
+        ];
+        $allFull = $baseAllowance - array_sum($shares); // contoh 100k
+
+        $lostWeeks = [];       // set of week numbers to deduct
+        $loseAllFull = false;  // only once
+
+        // Debug bantu (opsional)
+        // \Log::debug("[ALLOWANCE] Base={$baseAllowance}, share={$weekShare}, allFull={$allFull}");
+
+        foreach ($weeklyData as $weekNum => $days) {
+            // Abaikan week di luar 1..4 jika weeklyData punya week 5 (mis. akhir bulan)
+            if (!isset($shares[$weekNum])) {
+                // Jika ingin week5 mempengaruhi allFull, boleh diaktifkan:
+                // if (count(array_filter($days, fn($att) => !$att)) > 0) $loseAllFull = true;
+                continue;
+            }
+
+            $absentCount = count(array_filter($days, fn($attended) => !$attended));
+
+            if ($absentCount > 0) {
+                // Kehilangan share minggu ini + All Full
+                $lostWeeks[$weekNum] = true;
+                $loseAllFull = true;
+
+                // Jika absen >= 2 → hilang share minggu berikutnya juga (jika ada)
+                if ($absentCount >= 2) {
+                    $nextWeek = $weekNum + 1;
+                    if (isset($shares[$nextWeek])) {
+                        $lostWeeks[$nextWeek] = true;
+                    }
+                }
+            }
+
+            // Debug (opsional)
+            // \Log::debug("[ALLOWANCE] Week {$weekNum} absent={$absentCount} | LostWeeks=" . json_encode(array_keys($lostWeeks)));
+        }
+
+        // Hitung potongan akhir
+        $deduction = 0;
+
+        // potong shares minggu yang hilang (tanpa double count)
+        foreach (array_keys($lostWeeks) as $w) {
+            $deduction += $shares[$w];
+        }
+
+        // potong All Full sekali saja jika ada minimal satu pelanggaran
+        if ($loseAllFull) {
+            $deduction += $allFull;
+        }
+
+        return min($deduction, $baseAllowance);
     }
 }

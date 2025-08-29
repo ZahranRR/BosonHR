@@ -14,6 +14,8 @@ class Division extends Model
         'has_overtime',
         'hourly_rate',
         'work_days',
+        'check_in_time',
+        'check_out_time',
     ];
 
     protected $casts = [
