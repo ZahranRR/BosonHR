@@ -8,7 +8,7 @@ use App\Models\Attandance;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 
-class RandomAttendanceSeeder extends Seeder
+class SupirAndTechnicianSeeder extends Seeder
 {
 
     public function run()
@@ -21,7 +21,7 @@ class RandomAttendanceSeeder extends Seeder
         // contoh hanya untuk 1 employee id = 12
         $employees = Employee::where('employee_id', 10)->get(['employee_id']);
 
-        $month = '2025-08'; // bulan target
+        $month = '2025-09'; // bulan target
         [$year, $monthNumber] = explode('-', $month);
 
         $startDate = Carbon::create($year, $monthNumber, 1)->startOfMonth();
@@ -46,7 +46,7 @@ class RandomAttendanceSeeder extends Seeder
             }
 
             // Tentukan berapa hari random absen
-            $absentCount = 3; // contoh, bisa diubah sesuai kebutuhan
+            $absentCount = 6; // contoh, bisa diubah sesuai kebutuhan
 
             // Ambil N hari random absen
             $absentDays = [];

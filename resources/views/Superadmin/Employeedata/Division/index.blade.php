@@ -34,6 +34,7 @@
                         <tr>
                             <th class="text-left">Name</th>
                             <th class="text-center">Description</th>
+                            <th class="text-center">Work Hour</th>
                             <th class="text-center">Hourly Rate</th>
                             <th class="text-center">Overtime</th>
                             <th class="text-center">Work Days</th>
@@ -47,6 +48,10 @@
 
                             <td class="text-center">
                                 {{ \Illuminate\Support\Str::limit($division->description, 15, '...') }}
+                            </td>
+
+                            <td class="text-center">
+                                {{ substr($division->check_in_time, 0, 5) }} - {{ substr($division->check_out_time, 0, 5) }}
                             </td>
 
                             <!-- Tampilkan hourly rate -->
