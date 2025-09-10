@@ -63,6 +63,10 @@
                             <td>{{ $employee->division->name }}</td>
                         </tr>
                         <tr>
+                            <th>Employee Type</th>
+                            <td>{{ $employee->employee_type }}</td>
+                        </tr>
+                        <tr>
                             <th>Blood Type</th>
                             <td>{{ $employee->blood_type }}</td>
                         </tr>
@@ -119,6 +123,10 @@
                         <tr>
                             <th>Current Salary</th>
                             <td>Rp {{ number_format($employee->current_salary, 0, ',', '.') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Attendance Allowance</th>
+                            <td>Rp {{ number_format($employee->attendance_allowance, 0, ',', '.') }}</td>
                         </tr>
                         <tr>
                             <th>Insurance</th>

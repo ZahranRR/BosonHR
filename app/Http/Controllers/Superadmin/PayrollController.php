@@ -233,7 +233,16 @@ class PayrollController extends Controller
             $cashAdvance = $existing->cash_advance ?? 0;
 
             $divisionName = strtolower((string) optional($employee->division)->name);
-            if (in_array($divisionName, ['supir', 'kenek', 'helper', 'teknisi ac'])) {
+            if (in_array($divisionName, [
+                'supir',
+                'kenek',
+                'helper',
+                'teknisi ac',
+                'kasir',
+                'admin wholesale',
+                'admin retail',
+                'admin operasional retail'
+            ])) {
                 $weeklyData = $this->calculateWeeklyWorkdays($employee, $divisionWorkDays, $month);
 
                 $attendanceAllowance = $employee->attendance_allowance ?? 0;
@@ -243,28 +252,43 @@ class PayrollController extends Controller
                         $weeklyData,
                         $attendanceAllowance
                     );
-                    
+
                     $finalAllowance = $attendanceAllowance - $attendanceDeduction;
 
                     // jika tdk masuk lebih atau lebihdarisamadengan
                     // if ($totalAbsent >= 4) {
                     //     $finalAllowance = 0;
                     // }
-                    
+
+                    // if ($finalAllowance <= 0) {
+                    //     // allowance hangus total → potong prorate dari gaji pokok
+                    //     $extraAbsents = max(0, $totalAbsent - 4);
+                    //     $prorateDeduction = $dailySalary * $extraAbsents;
+
+                    //     $totalSalary -= $prorateDeduction;
+
+                    //     \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | Absent: {$totalAbsent} | Allowance HANGUS | Potong prorate gaji: {$prorateDeduction}");
+                    // } else {
+                    //     // masih ada allowance → tambahkan ke total
+                    //     $totalSalary += $finalAllowance;
+                    //     \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | Allowance: {$attendanceAllowance} | Deduction: {$attendanceDeduction} | Final Allowance: {$finalAllowance}");
+                    // }
+
                     if ($finalAllowance <= 0) {
-                        // allowance hangus total → potong prorate dari gaji pokok
-                        $extraAbsents = max(0, $totalAbsent - 4);
+                        // allowance hangus → potong prorate
+                        $maxAbsent = in_array($divisionName, ['kasir', 'admin wholesale', 'admin retail', 'admin operasional retail'])
+                            ? 3 : 4;
+
+                        $extraAbsents = max(0, $totalAbsent - $maxAbsent);
                         $prorateDeduction = $dailySalary * $extraAbsents;
-                    
+
                         $totalSalary -= $prorateDeduction;
-                    
-                        \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | Absent: {$totalAbsent} | Allowance HANGUS | Potong prorate gaji: {$prorateDeduction}");
+
+                        \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | {$divisionName} | Absent: {$totalAbsent} | Allowance HANGUS | Potong prorate gaji: {$prorateDeduction}");
                     } else {
-                        // masih ada allowance → tambahkan ke total
                         $totalSalary += $finalAllowance;
-                        \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | Allowance: {$attendanceAllowance} | Deduction: {$attendanceDeduction} | Final Allowance: {$finalAllowance}");
+                        \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | {$divisionName} | Allowance: {$attendanceAllowance} | Deduction: {$attendanceDeduction} | Final Allowance: {$finalAllowance}");
                     }
-                    
                 }
             }
 
@@ -442,6 +466,15 @@ class PayrollController extends Controller
         $period = CarbonPeriod::create($startDate, $endDate);
         $division = strtolower((string) optional($employee->division)->name);
 
+        $kasirExtraOff = [];
+        if ($division === 'kasir') {
+            $kasirExtraOff = collect(CarbonPeriod::create($startDate, $endDate))
+                ->filter(fn($d) => in_array($d->format('l'), ['Monday','Tuesday','Wednesday','Thursday','Friday']))
+                ->take(2)
+                ->map(fn($d) => $d->format('Y-m-d'))
+                ->toArray();
+        }
+
         foreach ($period as $date) {
             $dayName = $date->format('l');
             $weekNum = $date->weekOfMonth;
@@ -450,6 +483,12 @@ class PayrollController extends Controller
             // cek hari kerja
             if (!in_array($dayName, $effectiveDays)) continue;
             if (in_array($dateStr, $holidayDates)) continue;
+
+            // skip 2 weekday off untuk kasir
+            if ($division === 'kasir' && in_array($dateStr, $kasirExtraOff)) {
+                \Log::debug("[SKIP] Kasir extra weekday off {$dateStr}");
+                continue;
+            }
 
             // Supir & Teknisi AC → skip Minggu genap
             if (in_array($division, ['supir', 'teknisi ac']) && $dayName === 'Sunday' && $weekNum % 2 === 0) {
@@ -465,7 +504,7 @@ class PayrollController extends Controller
                     ->format('Y-m-d');
                 if ($dateStr === $lastSunday) {
                     \Log::debug("[SKIP] {$employee->first_name} {$employee->last_name} skip last Sunday {$dateStr}");
-                    continue; // ❌ jangan masukkan sama sekali
+                    continue; 
                 }
             }
 
@@ -473,7 +512,7 @@ class PayrollController extends Controller
             $attended = isset($attendances[$dateStr]);
             $weeklyData[$weekNum][$dayName] = $attended;
 
-            // \Log::debug(message: message: "[WeeklyData] {$employee->first_name} {$employee->last_name} | {$dateStr} ({$dayName}) | Week {$weekNum} | Attended: " . ($attended ? 'Yes' : 'No'));
+            \Log::debug(message: "[WeeklyData] {$employee->first_name} {$employee->last_name} | {$dateStr} ({$dayName}) | Week {$weekNum} | Attended: " . ($attended ? 'Yes' : 'No'));
         }
 
         return $weeklyData;
@@ -483,49 +522,49 @@ class PayrollController extends Controller
     private function calculateAttendanceAllowance($employee, $weeklyData, $baseAllowance)
     {
         $division = strtolower((string) optional($employee->division)->name);
-    
+
         // hitung absen per minggu (weekNum => absentCount)
         $absencesPerWeek = [];
         foreach ($weeklyData as $weekNum => $days) {
             $absencesPerWeek[(int)$weekNum] = count(array_filter($days, fn($attended) => !$attended));
         }
-    
+
         // hitung total absen (semua minggu)
         $totalAbsents = array_sum($absencesPerWeek);
-    
+
         $maxAbsent = 4; // default supir/helper/teknisi ac
         if (in_array($division, ['admin wholesale', 'admin retail', 'admin operasional retail', 'kasir'])) {
             $maxAbsent = 3;
         }
-    
+
         // aturan tegas: jika absen lebih dari maxAbsent → allowance hangus total
         if ($totalAbsents > $maxAbsent) {
             \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | {$division} | Absent {$totalAbsents}x > {$maxAbsent} → allowance hangus total.");
             return $baseAllowance; // deduction penuh, finalAllowance = 0
         }
-    
+
         // kalau masih ≤4, pakai scheme weekly share
         $scheme = $this->calculateWeeklyShareAllowance($baseAllowance, $absencesPerWeek);
         $shares = $scheme['shares'];
         $allFull = $scheme['allFull'];
         $lostShares = $scheme['lostShares'];
         $lostAllFull = $scheme['lostAllFull'];
-    
+
         $deduction = 0;
         foreach ($lostShares as $w => $val) {
             $deduction += (float)$val;
         }
-    
+
         if ($lostAllFull) {
             $allFullOriginal = $baseAllowance - (4 * ($baseAllowance / 6));
             $deduction += $allFullOriginal;
         }
 
         \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | {$division} | Absent {$totalAbsents}x ≤ {$maxAbsent} → deduction {$deduction}");
-    
+
         return $deduction;
     }
-    
+
 
     private function calculateWeeklyShareAllowance(float $baseAllowance, array $absencesPerWeek): array
     {
@@ -538,31 +577,36 @@ class PayrollController extends Controller
             4 => $weekShare,
         ];
         $allFull = $baseAllowance - array_sum($shares); // biasanya 2/6
-    
+
         $lostShares = [];
         $lostAllFull = false;
         $extraAbsencesOnNonShareWeeks = 0;
-    
+
         // Proses hanya untuk minggu yang relevan (1..4)
         foreach ($absencesPerWeek as $week => $absenceCount) {
-            if ($week < 1 || $week > 4) {
-                // absen di luar minggu share → hitung untuk prorata
-                $extraAbsencesOnNonShareWeeks += max(0, (int)$absenceCount);
-                continue;
-            }
-    
+            // if ($week < 1 || $week > 4) {
+            //     // absen di luar minggu share → hitung untuk prorata
+            //     $extraAbsencesOnNonShareWeeks += max(0, (int)$absenceCount);
+            //     continue;
+            // }
+
             $absenceCount = max(0, (int)$absenceCount);
-    
+
             if ($absenceCount >= 1) {
                 // minggu ini hangus
                 if (isset($shares[$week]) && $shares[$week] > 0) {
                     $lostShares[$week] = $shares[$week];
                     $shares[$week] = 0;
+                }else {
+                    // jika absen di minggu di luar share (misal week 5) → treat sebagai 1 share hilang
+                    // $extraAbsencesOnNonShareWeeks += $absenceCount;
+                    $lostShares[$week] = $weekShare;
                 }
+        
                 $lostAllFull = true; // allFull hangus
             }
-    
-            if ($absenceCount >= 2) {
+
+            if ($absenceCount >= 2 && $week >= 1 && $week <= 4) {
                 // minggu berikutnya hangus juga
                 $next = $week + 1;
                 if (isset($shares[$next]) && $shares[$next] > 0) {
@@ -570,7 +614,7 @@ class PayrollController extends Controller
                     $shares[$next] = 0;
                 }
             }
-    
+
             if ($absenceCount >= 3) {
                 // semua minggu hangus
                 foreach (array_keys($shares) as $w) {
@@ -583,17 +627,17 @@ class PayrollController extends Controller
                 break;
             }
         }
-    
+
         // Total allowance setelah potongan mingguan
         $allowanceAfterShares = array_sum($shares) + ($lostAllFull ? 0 : $allFull);
-    
+
         // Hitung prorate untuk absen di luar minggu share
         // aturan: setiap absen → potong baseAllowance / 24 (anggap 6 share × 4 minggu = 24 "slot")
         $proratePerAbsence = $baseAllowance / 24;
         $prorateDeduction = $extraAbsencesOnNonShareWeeks * $proratePerAbsence;
-    
+
         $finalAllowance = max(0, $allowanceAfterShares - $prorateDeduction);
-    
+
         return [
             'shares' => $shares,
             'allFull' => $lostAllFull ? 0 : $allFull,
@@ -604,5 +648,41 @@ class PayrollController extends Controller
             'finalAllowance' => $finalAllowance,
         ];
     }
-    
+
+    public function updateCashAdvance(Request $request, $id)
+    {
+        try {
+            $request->validate([
+                'cash_advance' => 'required|numeric|min:0',
+            ]);
+
+            $payroll = Payroll::findOrFail($id);
+            $oldValue = $payroll->cash_advance;
+
+            $payroll->cash_advance = $request->cash_advance;
+            $payroll->save();
+
+            Log::info("Cash Advance updated", [
+                'payroll_id' => $id,
+                'old_value' => $oldValue,
+                'new_value' => $payroll->cash_advance,
+                'user_id' => auth()->id(), // jika pakai auth
+            ]);
+
+            return response()->json([
+                'message' => 'Cash advance updated successfully.',
+                'cash_advance' => number_format($payroll->cash_advance, 0, ',', '.')
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to update cash advance', [
+                'payroll_id' => $id,
+                'error' => $e->getMessage(),
+                'user_id' => auth()->id(), // optional
+            ]);
+
+            return response()->json([
+                'message' => 'Terjadi kesalahan saat menyimpan kasbon.',
+            ], 500);
+        }
+    }
 }

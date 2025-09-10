@@ -25,25 +25,25 @@ class AdminAndKasirAttendanceSeeder extends Seeder
                 'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
-                'absent_count' => 2, // misal 2x absen random
+                'absent_count_range' => [1, 6],
             ],
             'Admin Retail' => [
                 'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
                 'check_in' => '09:00',
                 'check_out' => '17:00',
-                'absent_count' => 1,
+                'absent_count_range' => [1, 6],
             ],
             'Admin Operasional Retail' => [
                 'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
-                'absent_count' => 3,
+                'absent_count_range' => [1, 6],
             ],
             'Kasir' => [
                 'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
-                'absent_count' => 4, // + 2 weekday libur fix
+                'absent_count_range' => [1, 6],
             ],
         ];
 
@@ -54,6 +54,14 @@ class AdminAndKasirAttendanceSeeder extends Seeder
             $employees = Employee::where('division_id', $division->id)->get();
 
             foreach ($employees as $employee) {
+
+                if (isset($config['absent_count_range'])) {
+                    $absentCount = rand(
+                        min($config['absent_count_range']),
+                        max($config['absent_count_range'])
+                    );
+                }
+            
                 // --- Kasir: libur 2 weekday random ---
                 $kasirExtraOff = [];
                 if ($divisionName === 'Kasir') {
@@ -80,8 +88,8 @@ class AdminAndKasirAttendanceSeeder extends Seeder
 
                 // --- Tentukan absen random ---
                 $absentDays = [];
-                if ($config['absent_count'] > 0 && count($workDates) >= $config['absent_count']) {
-                    $absentKeys = (array) array_rand($workDates, $config['absent_count']);
+                if ($absentCount > 0 && count($workDates) >= $absentCount) {
+                    $absentKeys = (array) array_rand($workDates, $absentCount);
                     $absentDays = array_map(fn($key) => $workDates[$key], $absentKeys);
                 }
 

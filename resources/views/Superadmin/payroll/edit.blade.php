@@ -38,7 +38,7 @@
 
         <div class="mb-3">
             <label for="deductions" class="form-label">Potongan</label>
-            <input type="number" name="deductions" class="form-control" value="{{ old('deductions', $payroll->deductions) }}">
+            <input type="number" name="deductions" class="form-control" value="{{ old('deductions', default: $payroll->deductions) }}">
         </div>
 
         <button type="submit" class="btn btn-primary">Update Payroll</button>

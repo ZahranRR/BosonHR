@@ -48,7 +48,7 @@
                         <select name="division" class="form-control ml-2">
                             <option value="">All Divisions</option>
                             @foreach ($divisions as $division)
-                            <option value="{{ $division->id }}" {{ request()->query('division') == $division->id ? 'selected' : '' }}>
+                            <option value="{{ $division->id }}" {{ in_array($division->id, (array)request()->query('division')) ? 'selected' : '' }}>
                                 {{ $division->name }}
                             </option>
                             @endforeach
@@ -88,10 +88,6 @@
                     <tbody>
                         @forelse ($payrolls as $data)
                         <tr>
-                            <!-- @php
-                            dump($data);
-                            @endphp -->
-
                             <td>{{ $data['employee_name'] }}</td>
                             <td class="text-right">
                                 Rp. {{ number_format($data['current_salary'], 0, ',', '.') }}
@@ -114,8 +110,9 @@
                                 <button class="btn btn-sm btn-primary add-kasbon-btn"
                                     data-bs-toggle="modal"
                                     data-bs-target="#kasbonModal"
-                                    data-id="{{ $data['payroll_id'] ?? '' }}">
-                                    Add Kasbon
+                                    data-id="{{ $data['payroll_id'] ?? '' }}"
+                                    data-cash-advance="{{ $data['cash_advance'] ?? '' }}">
+                                    {{ ($data['cash_advance'] > 0) ? 'Edit Kasbon' : 'Add Kasbon' }}
                                 </button>
                             </td>
 
@@ -145,14 +142,12 @@
     </div>
 </section>
 
-<!-- {{-- JS untuk konfirmasi approve --}}
-<script>
-    function confirmApprove(id) {
-        if (confirm('Are you sure you want to approve this payroll?')) {
-            document.getElementById('approve-form-' + id).submit();
-        }
-    }
-</script> -->
+
+<!-- <script>
+    $(document).ready(function() {
+        $('.js-example-basic-multiple').select2();
+    });
+</script>  -->
 
 <script>
     function confirmApprove(id) {
@@ -182,9 +177,20 @@
         $('#kasbonModal').on('show.bs.modal', function(event) {
             const button = $(event.relatedTarget);
             const payrollId = button.data('id');
+            const cashAdvance = button.data('cash-advance');
+
             console.log("Payroll ID from button:", payrollId);
             $('#kasbonPayrollId').val(payrollId);
             console.log("Set hidden input to:", $('#kasbonPayrollId').val());
+
+            // Isi nilai input di dalam modal
+            // Gunakan selector jQuery ($('#...')) untuk mengakses elemen
+            $('#kasbonPayrollId').val(payrollId);
+            $('#kasbonNominal').val(cashAdvance);
+
+            // Opsional: Cek di konsol untuk memastikan nilai terisi dengan benar
+            console.log("Payroll ID:", payrollId);
+            console.log("Cash Advance:", cashAdvance);
         });
 
         // Saat tombol "Save Changes" di modal diklik

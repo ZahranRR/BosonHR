@@ -50,8 +50,9 @@
                     <table class="table table-striped projects">
                         <thead>
                             <tr>
-                                <th class="text-left" style="width: 20%;">First Name</th>
-                                <th class="text-center" style="width: 20%;">Last Name</th>
+                                <th class="text-left" style="width: 10%;">First Name</th>
+                                <th class="text-center" style="width: 10%;">Last Name</th>
+                                <th class="text-center" style="width: 10%;">Division</th>
                                 <th class="text-center" style="width: 20%;">Email</th>
                                 <th class="text-center" style="width: 20%;">Address</th>
                                 <th class="text-right" style="width: 20%;">Actions</th>
@@ -62,6 +63,7 @@
                                 <tr data-url="{{ route('employee.show', $employee->employee_id) }}" class="clickable-row">
                                     <td class="text-left">{{ $employee->first_name }}</td>
                                     <td class="text-center">{{ $employee->last_name }}</td>
+                                    <td class="text-center">{{ $employee->division->name ?? '-'}}</td>
                                     <td class="text-center">{{ $employee->email }}</td>
                                     <td class="text-center">{{ $employee->address }}</td>
                                     <td class="project-actions text-right">
@@ -94,3 +96,5 @@
 
     </section>
 @endsection
+
+
