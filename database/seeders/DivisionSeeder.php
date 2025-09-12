@@ -16,7 +16,7 @@ class DivisionSeeder extends Seeder
             // id 5
             [
                 'id'            => 5,
-                'name'          => 'Freenlance', // sesuai dump
+                'name'          => 'Freenlance Admin', // sesuai dump
                 'description'   => 'Freelance Admin',
                 'work_days'     => json_encode(["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]),
                 'has_overtime'  => 1,

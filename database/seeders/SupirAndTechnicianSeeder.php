@@ -46,7 +46,7 @@ class SupirAndTechnicianSeeder extends Seeder
             }
 
             // Tentukan berapa hari random absen
-            $absentCount = 6; // contoh, bisa diubah sesuai kebutuhan
+            $absentCount = 2; // contoh, bisa diubah sesuai kebutuhan
 
             // Ambil N hari random absen
             $absentDays = [];

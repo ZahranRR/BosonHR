@@ -15,7 +15,7 @@ class FreelanceAttendanceSeederr extends Seeder
         $freelancers = Employee::where('employee_type', 'freelance')->get();
 
         foreach ($freelancers as $freelancer) {
-            $startDate = Carbon::create(2025, 8, 1);
+            $startDate = Carbon::create(2025, 9, 1);
             $endDate = $startDate->copy()->endOfMonth();
 
             while ($startDate->lte($endDate)) {

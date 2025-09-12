@@ -28,6 +28,18 @@ class OvertimeController extends Controller
         })->get();
 
         return view('Superadmin.overtime.index', compact('overtimes'));
+
+        // // Jika user punya role superadmin, tampilkan semua
+        // if (auth()->user()->hasRole('superadmin')) {
+        //     $overtimes = Overtime::with('employee')->get();
+        // } else {
+        //     // Kalau bukan superadmin, hanya tampilkan overtime milik employee yg login
+        //     $overtimes = Overtime::whereHas('employee', function ($query) {
+        //         $query->where('employee_id', auth()->user()->employee->employee_id);
+        //     })->get();
+        // }
+
+        // return view('Superadmin.overtime.index', compact('overtimes'));
     }
 
 
