@@ -56,14 +56,14 @@
                                 <div class="form-group">
                                     <label>Time Check-In</label>
                                     <input type="time" name="check_in_time" class="form-control" required
-                                        value="{{ old('check_in_time', '10:00') }}">
+                                        value="{{ old('check_in_time', $division->check_in_time) }}">
 
                                 </div>
 
                                 <div class="form-group">
                                     <label>Time Check-Out</label>
                                     <input type="time" name="check_out_time" class="form-control" required
-                                        value="{{ old('check_out_time', '17:00') }}">
+                                        value="{{ old('check_out_time', $division->check_out_time) }}">
                                 </div>
                             </div>
 

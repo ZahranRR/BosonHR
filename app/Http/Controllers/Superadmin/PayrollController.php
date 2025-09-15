@@ -127,14 +127,59 @@ class PayrollController extends Controller
                 }
 
                 $totalNormalHours += $normalHours;
+                \Log::debug("[FREELANCE] {$employee->first_name} {$employee->last_name} | {$workDate} | In: {$checkIn->format('H:i')} | Out: {$checkOut->format('H:i')} | Worked: {$workedHours} jam | Normal: {$normalHours} jam | Late: " . ($isLate ? 'Yes' : 'No'));
 
             }
 
-            $totalOvertimeHours = Overtime::where('employee_id', $employee->employee_id)
+            $overtimeData = Overtime::where('employee_id', $employee->employee_id)
                 ->where('status', 'approved')
                 ->whereMonth('overtime_date', Carbon::parse($month)->month)
                 ->whereYear('overtime_date', Carbon::parse($month)->year)
-                ->sum('duration');
+                ->get();
+
+            $totalOvertimeHours = 0;
+
+            foreach ($overtimeData as $ot) {
+                $attendance = $employee->attendanceLogs()
+                    ->whereDate('check_in', $ot->overtime_date)
+                    ->orderByDesc('check_out')
+                    ->first();
+
+                if (!$attendance || !$attendance->check_out) {
+                    \Log::debug("[OT] {$employee->first_name} {$employee->last_name} | {$ot->overtime_date} | Skip (no checkout)");
+                    continue;
+                }
+
+                $checkOut = Carbon::parse($attendance->check_out);
+                $divisionOutTime = Carbon::createFromFormat('H:i:s', $divisionOut);
+                $overtimeStart = Carbon::parse($attendance->check_out)
+                    ->setTimeFromTimeString($divisionOutTime->format('H:i:s'))
+                    ->addMinutes(30);
+                // $overtimeStart = $divisionOutTime->copy()->addMinutes(30); // cutoff 18:30
+
+                \Log::debug("[OT] {$employee->first_name} {$employee->last_name} | {$ot->overtime_date} | Checkout: {$checkOut->format('Y-m-d H:i')} | Cutoff: {$overtimeStart->format('H:i')}");
+
+                if ($checkOut->lte($overtimeStart)) {
+                    \Log::debug("[OT] {$employee->first_name} {$employee->last_name} | {$ot->overtime_date} | Checkout {$checkOut->format('H:i')} ≤ 18:30 → 0 jam");
+                    continue;
+                }
+
+                $overtimeMinutes = $overtimeStart->diffInMinutes($checkOut);
+                $hours = ceil($overtimeMinutes / 60);
+
+                // maksimal 2 jam / hari
+                $hours = min($hours, 2);
+
+                $totalOvertimeHours += $hours;
+
+                \Log::debug("[OT] {$employee->first_name} {$employee->last_name} | {$ot->overtime_date} | Checkout {$checkOut->format('H:i')} | Overtime {$hours} jam");
+            }
+
+             // ⛔ Pastikan overtime minimal 0
+             $overtimePay = max(0, $totalOvertimeHours * $hourlyRate);
+
+             \Log::info("[OT-SUMMARY] {$employee->first_name} {$employee->last_name} | Bulan: {$month} | Total OT Hours: {$totalOvertimeHours} | Overtime Pay: {$overtimePay}");
+
 
             $workedDays = count($uniqueWorkDays);
             $absentDays = max(0, $plannedWorkDays - $workedDays);

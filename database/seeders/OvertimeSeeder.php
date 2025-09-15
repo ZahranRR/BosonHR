@@ -11,12 +11,13 @@ class OvertimeSeeder extends Seeder
 {
     public function run()
     {
-        $employee = Employee::where('division_id', 11) // misal divisi admin wholesale
-            ->where('employee_id', 16)
+        //admin wholesale = 11, freelance admin = 5
+        $employee = Employee::where('division_id', 5) // misal divisi admin wholesale
+            ->where('employee_id', 25)
             ->first();
 
         if (!$employee) {
-            $this->command->warn("No freelance admin wholesale found");
+            $this->command->warn("No freelance or admin wholesale found");
             return;
         }
 
@@ -33,7 +34,8 @@ class OvertimeSeeder extends Seeder
         // Pending overtime
         Overtime::create([
             'employee_id' => $employee->employee_id,
-            'overtime_date' => Carbon::now()->subDays(1),
+            'overtime_date' => Carbon::now()->addDays(1),
+            // 'overtime_date' => Carbon::now()->subDays(1),
             'duration' => 2,
             'notes' => 'Pending overtime test',
             'manager_id' => 2,
