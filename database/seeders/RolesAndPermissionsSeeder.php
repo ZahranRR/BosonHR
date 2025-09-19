@@ -161,7 +161,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'offrequest.create',
             'offrequest.index',
             'resignationrequest.create',
-            'resignationrequest.index'
+            'resignationrequest.index',
+            'overtime.create',
         ]);
 
 

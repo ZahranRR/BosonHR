@@ -214,6 +214,16 @@
                          <li class="nav-item menu-open">
                              <ul class="nav nav-treeview">
                                  <li class="nav-item">
+                                     <a href={{ route('payroll.index') }} class="nav-link">
+                                         <i class="fas fa-wallet nav-icon"></i>
+                                         <p>Payroll</p>
+                                     </a>
+                                 </li>
+                             </ul>
+                         </li>
+                         <li class="nav-item menu-open">
+                             <ul class="nav nav-treeview">
+                                 <li class="nav-item">
                                      <a href={{ route('recruitment.index') }} class="nav-link">
                                          <i class="fas fa-users nav-icon"></i>
                                          <p>Recruitment</p>

@@ -99,7 +99,6 @@ class PayrollController extends Controller
             $divisionOut = $employee->division->check_out_time ?? '18:00:00';
 
             $standardIn  = Carbon::createFromFormat('H:i:s', $divisionIn)->format('H:i:s');
-            $overtimeStart = Carbon::createFromFormat('H:i:s', $divisionOut)->addMinutes(30)->format('H:i:s'); // lembur dihitung 30 menit setelah jam pulang
             $toleranceMinutes = 15;
 
             $totalNormalHours = 0;
@@ -128,7 +127,6 @@ class PayrollController extends Controller
 
                 $totalNormalHours += $normalHours;
                 \Log::debug("[FREELANCE] {$employee->first_name} {$employee->last_name} | {$workDate} | In: {$checkIn->format('H:i')} | Out: {$checkOut->format('H:i')} | Worked: {$workedHours} jam | Normal: {$normalHours} jam | Late: " . ($isLate ? 'Yes' : 'No'));
-
             }
 
             $overtimeData = Overtime::where('employee_id', $employee->employee_id)
@@ -165,25 +163,28 @@ class PayrollController extends Controller
                 }
 
                 $overtimeMinutes = $overtimeStart->diffInMinutes($checkOut);
-                $hours = ceil($overtimeMinutes / 60);
+                $actualHours = max(1, ceil($overtimeMinutes / 60));
 
-                // maksimal 2 jam / hari
-                $hours = min($hours, 2);
+                // ambil sesuai request employee (misalnya 1 jam atau 2 jam)
+                $requestedHours = $ot->duration;
+
+                // // overtime final = minimum dari actual & request
+                $hours = min($actualHours, $requestedHours, 2); //max 2 jam per hari
 
                 $totalOvertimeHours += $hours;
 
                 \Log::debug("[OT] {$employee->first_name} {$employee->last_name} | {$ot->overtime_date} | Checkout {$checkOut->format('H:i')} | Overtime {$hours} jam");
             }
 
-             // ⛔ Pastikan overtime minimal 0
-             $overtimePay = max(0, $totalOvertimeHours * $hourlyRate);
+            // ⛔ Pastikan overtime minimal 0
+            $overtimePay = max(0, $totalOvertimeHours * $hourlyRate);
 
-             \Log::info("[OT-SUMMARY] {$employee->first_name} {$employee->last_name} | Bulan: {$month} | Total OT Hours: {$totalOvertimeHours} | Overtime Pay: {$overtimePay}");
+            \Log::info("[OT-SUMMARY] {$employee->first_name} {$employee->last_name} | Bulan: {$month} | Total OT Hours: {$totalOvertimeHours} | Overtime Pay: {$overtimePay}");
 
 
             $workedDays = count($uniqueWorkDays);
             $absentDays = max(0, $plannedWorkDays - $workedDays);
-            
+
             $positionalAllowance = $employee->positional_allowance ?? 0;
             $transportAllowance = $employee->transport_allowance ?? 0;
             $bonusAllowance = $employee->bonus_allowance ?? 0;
@@ -210,7 +211,7 @@ class PayrollController extends Controller
                 $workedDays,
                 $lateCount,
                 $cashAdvance,
-                $positionalAllowance, 
+                $positionalAllowance,
                 $transportAllowance,
                 $bonusAllowance
             );
@@ -295,10 +296,13 @@ class PayrollController extends Controller
                 }
 
                 $overtimeMinutes = $overtimeStart->diffInMinutes($checkOut);
-                $hours = ceil($overtimeMinutes / 60);
+                $actualHours = max(1, ceil($overtimeMinutes / 60));
+
+                // request overtime dari tabel (1 atau 2 jam)
+                $requestedHours = $ot->duration;
 
                 // maksimal 2 jam / hari
-                $hours = min($hours, 2);
+                $hours = min($actualHours, $requestedHours, 2);
 
                 $totalOvertimeHours += $hours;
 
@@ -380,7 +384,7 @@ class PayrollController extends Controller
                 $monthlyWorkdays,
                 $totalLateCheckIn,
                 $cashAdvance,
-                $positionalAllowance, 
+                $positionalAllowance,
                 $transportAllowance,
                 $bonusAllowance
             );

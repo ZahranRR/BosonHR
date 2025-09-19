@@ -264,12 +264,33 @@
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="current_salary">Attendance Allowance</label>
+                                    <label for="attendance_allowance">Attendance Allowance</label>
                                     <input type="text" name="attendance_allowance" id="attendance_allowance"
                                         class="form-control" value="{{ old('attendance_allowance') }}"
                                         oninput="formatCurrency(this)">
-
                                 </div>
+
+                                <div class="form-group">
+                                    <label for="positional_allowance">Positional Allowance</label>
+                                    <input type="text" name="positional_allowance" id="positional_allowance"
+                                        class="form-control" value="{{ old('positional_allowance') }}"
+                                        oninput="formatCurrency(this)">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="transport_allowance">Transport Allowance</label>
+                                    <input type="text" name="transport_allowance" id="transport_allowance"
+                                        class="form-control" value="{{ old('transport_allowance') }}"
+                                        oninput="formatCurrency(this)">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="bonus_allowance">Bonus</label>
+                                    <input type="text" name="bonus_allowance" id="bonus_allowance"
+                                        class="form-control" value="{{ old('bonus_allowance') }}"
+                                        oninput="formatCurrency(this)">
+                                </div>
+
                                 <div class="form-group">
                                     <label for="insurance">Insurance</label>
                                     <select name="insurance" id="insurance" class="form-control">

@@ -54,43 +54,67 @@ class OvertimeController extends Controller
 
     public function store(Request $request)
     {
-        // Validasi data overtime
-        $request->validate([
-            'overtime_date' => [
-                'required',
-                'date',
-                function ($attribute, $value, $fail) {
-                    // Validasi apakah sudah ada overtime pada tanggal yang sama
-                    $existingOvertime = Overtime::whereHas('employee', function ($query) {
-                        $query->where('employee_id', Auth::user()->employee->employee_id);  // Menggunakan employee_id dari user yang sedang login
-                    })
-                        ->where('overtime_date', $value)  // Mencari overtime yang sudah ada pada tanggal yang sama
-                        ->whereIn('status', ['pending', 'approved'])  // Mengecek jika statusnya pending atau approved
-                        ->exists();
+        try {
+            // Validasi data overtime
+            $request->validate([
+                'overtime_date' => [
+                    'required',
+                    'date',
+                    function ($attribute, $value, $fail) {
+                        // Validasi apakah sudah ada overtime pada tanggal yang sama
+                        $existingOvertime = Overtime::whereHas('employee', function ($query) {
+                            $query->where('employee_id', Auth::user()->employee->employee_id);  // Menggunakan employee_id dari user yang sedang login
+                        })
+                            ->where('overtime_date', $value)  // Mencari overtime yang sudah ada pada tanggal yang sama
+                            ->whereIn('status', ['pending', 'approved'])  // Mengecek jika statusnya pending atau approved
+                            ->exists();
 
-                    if ($existingOvertime) {
-                        session()->flash('error', 'You already have an overtime request for this date.');
-                        $fail('You already have an overtime request for this date.');
+                        if ($existingOvertime) {
+                            session()->flash('error', 'You already have an overtime request for this date.');
+                            $fail('You already have an overtime request for this date.');
+                        }
                     }
-                }
-            ],
-            'duration' => 'required|integer|min:1',
-            'notes' => 'required|string|max:255',
-            'manager_id' => 'required|exists:users,user_id',
-        ]);
+                ],
+                'duration' => 'required|integer|in:1,2',
+                'notes' => 'required|string|max:255',
+                'manager_id' => 'required|exists:users,user_id',
+                'attachment' => 'required|image|mimes:jpg,jpeg,png|max:2048',
+            ]);
 
-        // Membuat data overtime
-        Overtime::create([
-            'employee_id' => auth()->user()->employee->employee_id,  // Mendapatkan employee_id dari user yang sedang login
-            'overtime_date' => $request->overtime_date,
-            'duration' => $request->duration,
-            'notes' => $request->notes,
-            'manager_id' => $request->manager_id,  // Mendapatkan manager_id dari form
-            'status' => 'pending',  // Status default untuk overtime yang diajukan
-        ]);
+            // Simpan file jika ada
+            if ($request->hasFile('attachment')) {
+                $attachmentPath = $request->file('attachment')->store('overtime_attachments', 'public');
+            }
 
-        // Redirect ke halaman overtime index dengan pesan sukses
-        return redirect()->route('overtime.index')->with('success', 'Overtime request has been successfully added!');
+
+            // Membuat data overtime
+            Overtime::create([
+                'employee_id' => auth()->user()->employee->employee_id,  // Mendapatkan employee_id dari user yang sedang login
+                'overtime_date' => $request->overtime_date,
+                'duration' => $request->duration,
+                'notes' => $request->notes,
+                'attachment' => $attachmentPath,
+                'manager_id' => $request->manager_id,  // Mendapatkan manager_id dari form'
+                'status' => 'pending',  // Status default untuk overtime yang diajukan
+            ]);
+
+            Log::info('Overtime created successfully', [
+                'employee_id' => $request->employee_id,
+                'overtime_id' => $request->id,
+                'attachment'  => $attachmentPath,
+            ]);
+
+            // Redirect ke halaman overtime index dengan pesan sukses
+            return redirect()->route('overtime.index')->with('success', 'Overtime request has been successfully added!');
+        } catch (\Exception $e) {
+            Log::error('Failed to create overtime', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => auth()->id(),
+            ]);
+
+            return redirect()->back()->with('error', 'Failed to submit overtime request. Please try again.');
+        }
     }
 
 

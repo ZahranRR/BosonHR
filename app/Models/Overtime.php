@@ -10,7 +10,7 @@ class Overtime extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['employee_id', 'overtime_date', 'duration', 'notes', 'status','manager_id'];
+    protected $fillable = ['employee_id', 'overtime_date', 'duration', 'notes', 'status','manager_id','attachment'];
 
 
     // Model Overtime

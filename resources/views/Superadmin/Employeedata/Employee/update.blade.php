@@ -296,6 +296,27 @@
                                     </div>
 
                                     <div class="form-group">
+                                        <label for="positional_allowance">Positional Allowance</label>
+                                        <input type="text" name="positional_allowance" id="positional_allowance"
+                                            class="form-control" value="{{ old('positional_allowance', number_format($employeeModel->positional_allowance, 0, ',', '.')) }}"
+                                            oninput="formatCurrency(this)">
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="transport_allowance">Transport Allowance</label>
+                                        <input type="text" name="transport_allowance" id="transport_allowance"
+                                            class="form-control" value="{{ old('transport_allowance', number_format($employeeModel->transport_allowance, 0, ',', '.')) }}"
+                                            oninput="formatCurrency(this)">
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="bonus_allowance">Bonus</label>
+                                        <input type="text" name="bonus_allowance" id="bonus_allowance"
+                                            class="form-control" value="{{ old('bonus_allowance', number_format($employeeModel->bonus_allowance, 0, ',', '.')) }}"
+                                            oninput="formatCurrency(this)">
+                                    </div>
+
+                                    <div class="form-group">
                                         <label for="insurance">Insurance</label>
                                         <select name="insurance" id="insurance" class="form-control">
                                             <option value="1"
@@ -395,11 +416,11 @@
                         </div>
                     </form>
                     <script>
-                            function formatCurrency(input) {
-                                let value = input.value.replace(/[^\d]/g, '');
-                                value = value.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-                                input.value = value;
-                            }
+                        function formatCurrency(input) {
+                            let value = input.value.replace(/[^\d]/g, '');
+                            value = value.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                            input.value = value;
+                        }
 
                         // Hapus titik sebelum kirim ke server
                         document.addEventListener('DOMContentLoaded', function() {
@@ -418,7 +439,6 @@
                                 });
                             }
                         });
-
                     </script>
 
                     <script>

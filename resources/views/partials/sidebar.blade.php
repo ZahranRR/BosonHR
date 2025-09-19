@@ -296,6 +296,7 @@
 
                 @endcanany
 
+
                 @canany(['overtime.create'])
                     <li class="nav-item menu-open">
                         <ul class="nav nav-treeview">
@@ -341,6 +342,32 @@
                                 <a href="{{ route('payroll.index') }}" class="nav-link">
                                     <i class="fas fa-calculator nav-icon"></i>
                                     <p>Payroll</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                @endcanany
+
+                @canany(['kasbon.index'])
+                    <li class="nav-item menu-open">
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{{ route('kasbon.index') }}" class="nav-link">
+                                    <i class="fas fa-file-invoice-dollar nav-icon"></i>
+                                    <p>Kasbon</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                @endcanany
+
+                @canany(['kasbon.aprroval'])
+                    <li class="nav-item menu-open">
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{{ route('kasbon.approval') }}" class="nav-link">
+                                    <i class="fas fa-file-invoice-dollar nav-icon"></i>
+                                    <p>Kasbon</p>
                                 </a>
                             </li>
                         </ul>
