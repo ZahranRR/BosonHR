@@ -45,7 +45,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'employee.show',
 
 
-           
+
 
             // Permission terkait Recruitment
             'recruitment.index',
@@ -105,6 +105,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'divisions.create',
             'divisions.edit',
             'divisions.delete',
+
+            // // Permission terkait Kasbon
+            'kasbon.index',
+            'kasbon.create',
+            'kasbon.edit',
+            'kasbon.delete',
+
         ];
 
         foreach ($permissions as $permission) {
@@ -126,10 +133,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'attendance.scan',
             'recruitment.index',
 
-        
             'payroll.index',
             'payroll.export',
-
 
             'offrequest.index',
             'offrequest.create',
@@ -144,8 +149,20 @@ class RolesAndPermissionsSeeder extends Seeder
 
             'submitresign.index',
             'submitresign.create',
+
+            'kasbon.index',
+            'kasbon.create',
+            'kasbon.edit',
+            'kasbon.delete',
         ]);
-        $employeeRole->givePermissionTo(['dashboard.employee', 'attendance.scan', 'offrequest.create', 'offrequest.index','resignationrequest.create', 'resignationrequest.index']);
+        $employeeRole->givePermissionTo([
+            'dashboard.employee',
+            'attendance.scan',
+            'offrequest.create',
+            'offrequest.index',
+            'resignationrequest.create',
+            'resignationrequest.index'
+        ]);
 
 
         $superadmin = User::updateOrCreate(
@@ -182,54 +199,54 @@ class RolesAndPermissionsSeeder extends Seeder
         $employee->assignRole($employeeRole);
 
         // Pertama, pastikan employee Bunga Putri sudah ada di tabel Employee
-        $bungadevtriEmployee = Employee::firstOrCreate(
-            [
-                'email' => 'bungadevtri@gmail.com',
-            ],
-            [
-                'first_name' => 'Bunga',
-                'last_name' => 'Putri',
-                'check_in_time' => '08:00:00',
-                'check_out_time' => '17:00:00',
-                'place_birth' => 'City',
-                'date_birth' => now(),
-                'identity_number' => 'P-000003',
-                'address' => 'Some Address',
-                'current_address' => 'Some Address',
-                'blood_type' => 'O',
-                'blood_rhesus' => '+',
-                'phone_number' => '1234567890',
-                'hp_number' => '0987654321',
-                'marital_status' => 'Single',
-                'cv_file' => 'default_cv.pdf',
-                'last_education' => 'Elementary School',
-                'degree' => 'S.Kom',
-                'starting_date' => now(),
-                'interview_by' => 'Interviewer',
-                'current_salary' => 5000000,
-                'insurance' => true,
-                'serious_illness' => 'None',
-                'hereditary_disease' => 'None',
-                'emergency_contact' => 'Mother',
-                'relations' => 'Parent',
-                'emergency_number' => '1234567890',
-                'status' => 'Active',
-            ],
-        );
+        // $bungadevtriEmployee = Employee::firstOrCreate(
+        //     [
+        //         'email' => 'bungadevtri@gmail.com',
+        //     ],
+        //     [
+        //         'first_name' => 'Bunga',
+        //         'last_name' => 'Putri',
+        //         'check_in_time' => '08:00:00',
+        //         'check_out_time' => '17:00:00',
+        //         'place_birth' => 'City',
+        //         'date_birth' => now(),
+        //         'identity_number' => 'P-000003',
+        //         'address' => 'Some Address',
+        //         'current_address' => 'Some Address',
+        //         'blood_type' => 'O',
+        //         'blood_rhesus' => '+',
+        //         'phone_number' => '1234567890',
+        //         'hp_number' => '0987654321',
+        //         'marital_status' => 'Single',
+        //         'cv_file' => 'default_cv.pdf',
+        //         'last_education' => 'Elementary School',
+        //         'degree' => 'S.Kom',
+        //         'starting_date' => now(),
+        //         'interview_by' => 'Interviewer',
+        //         'current_salary' => 5000000,
+        //         'insurance' => true,
+        //         'serious_illness' => 'None',
+        //         'hereditary_disease' => 'None',
+        //         'emergency_contact' => 'Mother',
+        //         'relations' => 'Parent',
+        //         'emergency_number' => '1234567890',
+        //         'status' => 'Active',
+        //     ],
+        // );
 
-        // Membuat pengguna untuk Bunga Putri
-        $bungadevtri = User::updateOrCreate(
-            [
-                'email' => 'bungadevtri@gmail.com',
-            ],
-            [
-                'name' => 'Bunga Putri',
-                'password' => Hash::make('password'),
-                'employee_id' => $bungadevtriEmployee->employee_id, // Relasi dengan data Employee
-            ]
-        );
+        // // Membuat pengguna untuk Bunga Putri
+        // $bungadevtri = User::updateOrCreate(
+        //     [
+        //         'email' => 'bungadevtri@gmail.com',
+        //     ],
+        //     [
+        //         'name' => 'Bunga Putri',
+        //         'password' => Hash::make('password'),
+        //         'employee_id' => $bungadevtriEmployee->employee_id, // Relasi dengan data Employee
+        //     ]
+        // );
 
-        // Assign role Manager ke Bunga Putri
-        $bungadevtri->assignRole($managerRole);
+        // // Assign role Manager ke Bunga Putri
+        // $bungadevtri->assignRole($managerRole);
     }
 }

@@ -205,6 +205,9 @@ class EmployeeController extends Controller
                     'interview_by' => 'nullable|string',
                     'current_salary' => 'nullable|string',
                     'attendance_allowance' => 'nullable|string',
+                    'positional_allowance' => 'nullable|string',
+                    'transport_allowance' => 'nullable|string',
+                    'bonus_allowance' => 'nullable|string',
                     'insurance' => 'nullable|boolean',
                     'serious_illness' => 'nullable|string',
                     'hereditary_disease' => 'nullable|string',
@@ -374,6 +377,9 @@ class EmployeeController extends Controller
                 'interview_by' => 'nullable|string',
                 'current_salary' => 'nullable|string',
                 'attendance_allowance' => 'nullable|string',
+                'positional_allowance' => 'nullable|string',
+                'transport_allowance' => 'nullable|string',
+                'bonus_allowance' => 'nullable|string',
                 'insurance' => 'nullable|boolean',
                 'serious_illness' => 'nullable|string',
                 'hereditary_disease' => 'nullable|string',
@@ -403,6 +409,19 @@ class EmployeeController extends Controller
         if (isset($request->attendance_allowance)) {
             $validatedData['attendance_allowance'] = (int) str_replace('.', '', $request->input('attendance_allowance'));
         }
+
+        if (isset($request->positional_allowance)) {
+            $validatedData['positional_allowance'] = (int) str_replace('.', '', $request->input('positional_allowance'));
+        }
+        
+        if (isset($request->transport_allowance)) {
+            $validatedData['transport_allowance'] = (int) str_replace('.', '', $request->input('transport_allowance'));
+        }
+        
+        if (isset($request->bonus_allowance)) {
+            $validatedData['bonus_allowance'] = (int) str_replace('.', '', $request->input('bonus_allowance'));
+        }
+        
 
         // Proses penggantian file CV hanya jika ada file CV yang diunggah
         if ($request->hasFile('cv_file')) {

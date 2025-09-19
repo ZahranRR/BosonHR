@@ -183,10 +183,13 @@ class PayrollController extends Controller
 
             $workedDays = count($uniqueWorkDays);
             $absentDays = max(0, $plannedWorkDays - $workedDays);
-
+            
+            $positionalAllowance = $employee->positional_allowance ?? 0;
+            $transportAllowance = $employee->transport_allowance ?? 0;
+            $bonusAllowance = $employee->bonus_allowance ?? 0;
             $baseSalary = $totalNormalHours * $hourlyRate;
             $overtimePay = $totalOvertimeHours * $hourlyRate;
-            $totalSalary = $baseSalary + $overtimePay - $cashAdvance;
+            $totalSalary = $baseSalary + $overtimePay + $positionalAllowance + $transportAllowance + $bonusAllowance - $cashAdvance;
 
             \Log::info("Payroll Summary | {$employee->first_name} {$employee->last_name} | Month: {$month} | Planned WorkDays: {$plannedWorkDays} | Actual WorkDays: {$workedDays} | Absent: {$absentDays} | Total Normal Hours: {$totalNormalHours} | Overtime Hours: {$totalOvertimeHours} | Base Salary: {$baseSalary} | Overtime Pay: {$overtimePay} | Total Salary: {$totalSalary}");
 
@@ -206,7 +209,10 @@ class PayrollController extends Controller
                 0,
                 $workedDays,
                 $lateCount,
-                $cashAdvance
+                $cashAdvance,
+                $positionalAllowance, 
+                $transportAllowance,
+                $bonusAllowance
             );
         } catch (\Exception $e) {
             \Log::error("Error Payroll Freelance | Employee: {$employee->employee_id} | {$employee->first_name} {$employee->last_name} | Month: {$month} | Msg: {$e->getMessage()} | Trace: {$e->getTraceAsString()}");
@@ -306,15 +312,20 @@ class PayrollController extends Controller
 
 
             // --- Hitung gaji dasar & potongan ---
-            $totalDeductions = ($totalLateCheckIn * $lateDeduction) + ($totalEarlyCheckOut * $earlyDeduction);
             $baseSalary = $employee->current_salary ?? 0;
-            $totalSalary = $baseSalary - $totalDeductions + $overtimePay - $cashAdvance;
+            $positionalAllowance = $employee->positional_allowance ?? 0;
+            $transportAllowance = $employee->transport_allowance ?? 0;
+            $bonusAllowance = $employee->bonus_allowance ?? 0;
+
+            $totalDeductions = ($totalLateCheckIn * $lateDeduction) + ($totalEarlyCheckOut * $earlyDeduction);
+            $totalSalary = $baseSalary - $totalDeductions + $overtimePay + $positionalAllowance + $transportAllowance + $bonusAllowance - $cashAdvance;
 
             // simpan cash advance lama
             $existing = Payroll::where('employee_id', $employee->employee_id)
                 ->where('month', $month)
                 ->first();
             $cashAdvance = $existing->cash_advance ?? 0;
+
 
             // --- Attendance Allowance ---
             $divisionName = strtolower((string) optional($employee->division)->name);
@@ -368,7 +379,10 @@ class PayrollController extends Controller
                 $totalEarlyCheckOut,
                 $monthlyWorkdays,
                 $totalLateCheckIn,
-                $cashAdvance
+                $cashAdvance,
+                $positionalAllowance, 
+                $transportAllowance,
+                $bonusAllowance
             );
         } catch (\Exception $e) {
             \Log::error("Payroll Permanent ERROR | {$employee->first_name} {$employee->last_name} | {$month} | {$e->getMessage()}");
@@ -376,7 +390,7 @@ class PayrollController extends Controller
         }
     }
 
-    private function storePayroll($employee, $month, $totalSalary, $baseSalary, $overtimePay, $totalDaysWorked, $totalAbsent, $totalEarlyCheckOut, $effectiveWorkDays, $totalLateCheckIn, $cashAdvance)
+    private function storePayroll($employee, $month, $totalSalary, $baseSalary, $overtimePay, $totalDaysWorked, $totalAbsent, $totalEarlyCheckOut, $effectiveWorkDays, $totalLateCheckIn, $cashAdvance, $positionalAllowance, $transportAllowance, $bonusAllowance)
     {
         $isFreelance = $employee->employee_type === 'Freelance';
 
@@ -384,7 +398,7 @@ class PayrollController extends Controller
             ['employee_id' => $employee->employee_id, 'month' => $month],
             [
                 'employee_name' => $employee->first_name . ' ' . $employee->last_name,
-                'current_salary' => $isFreelance ? 0 : ($employee->current_salary ?? 0),
+                'current_salary' => $employee->current_salary ?? 0,
                 'total_days_worked' => $totalDaysWorked,
                 'total_absent' => $totalAbsent,
                 'total_days_off' => 0,
@@ -393,6 +407,9 @@ class PayrollController extends Controller
                 'effective_work_days' => $effectiveWorkDays,
                 'overtime_pay' => $overtimePay,
                 'cash_advance' => $cashAdvance,
+                'positional_allowance' => $positionalAllowance,
+                'transport_allowance'  => $transportAllowance,
+                'bonus_allowance'      => $bonusAllowance,
                 'total_salary' => $totalSalary,
                 'status' => 'Pending',
             ]
@@ -402,7 +419,7 @@ class PayrollController extends Controller
             'payroll_id' => $payroll->payroll_id,
             'id' => $employee->employee_id,
             'employee_name' => $employee->first_name . ' ' . $employee->last_name,
-            'current_salary' => $isFreelance ? 0 : ($employee->current_salary ?? 0),
+            'current_salary' => $employee->current_salary ?? 0,
             'total_days_worked' => $totalDaysWorked,
             'total_absent' => $totalAbsent,
             'total_days_off' => 0,
@@ -411,6 +428,9 @@ class PayrollController extends Controller
             'effective_work_days' => $effectiveWorkDays,
             'overtime_pay' => $overtimePay,
             'cash_advance' => $cashAdvance,
+            'positional_allowance' => $positionalAllowance,
+            'transport_allowance'  => $transportAllowance,
+            'bonus_allowance'      => $bonusAllowance,
             'total_salary' => $totalSalary,
             'status' => 'Pending',
         ];
