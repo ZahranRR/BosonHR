@@ -129,6 +129,18 @@
                             <td>Rp {{ number_format($employee->attendance_allowance, 0, ',', '.') }}</td>
                         </tr>
                         <tr>
+                            <th>Positional Allowance</th>
+                            <td>Rp {{ number_format($employee->positional_allowance, 0, ',', '.') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Transport Allowance</th>
+                            <td>Rp {{ number_format($employee->transport_allowance, 0, ',', '.') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Bonus</th>
+                            <td>Rp {{ number_format($employee->bonus_allowance, 0, ',', '.') }}</td>
+                        </tr>
+                        <tr>
                             <th>Insurance</th>
                             <td>{{ $employee->insurance ? 'Yes' : 'No' }}</td>
                         </tr>

@@ -112,6 +112,11 @@ class RolesAndPermissionsSeeder extends Seeder
             'kasbon.edit',
             'kasbon.delete',
 
+            // Permission terkait Slip pay
+            'slippay.index',
+            'slippay.preview',
+            'slippay.download'
+
         ];
 
         foreach ($permissions as $permission) {
@@ -123,38 +128,39 @@ class RolesAndPermissionsSeeder extends Seeder
         $employeeRole = Role::firstOrCreate(['name' => 'employee'], ['status' => 'enable']);
 
         $adminRole->givePermissionTo($permissions); // Superadmin mendapatkan semua permission
-        $managerRole->givePermissionTo([
-            'dashboard.employee',
-            'user.index',
-            'user.edit',
+        $managerRole->givePermissionTo($permissions); // manager mendapatkan semua permission
+        // $managerRole->givePermissionTo([
+        //     'dashboard.employee',
+        //     'user.index',
+        //     'user.edit',
 
-            'role.index',
-            'employee.index',
-            'attendance.scan',
-            'recruitment.index',
+        //     'role.index',
+        //     'employee.index',
+        //     'attendance.scan',
+        //     'recruitment.index',
 
-            'payroll.index',
-            'payroll.export',
+        //     'payroll.index',
+        //     'payroll.export',
 
-            'offrequest.index',
-            'offrequest.create',
-            'offrequest.approver',
+        //     'offrequest.index',
+        //     'offrequest.create',
+        //     'offrequest.approver',
 
-            'overtime.create',
-            'overtime.approvals',
+        //     'overtime.create',
+        //     'overtime.approvals',
 
-            'resignationrequest.index',
-            'resignationrequest.create',
-            'resignationrequest.approver',
+        //     'resignationrequest.index',
+        //     'resignationrequest.create',
+        //     'resignationrequest.approver',
 
-            'submitresign.index',
-            'submitresign.create',
+        //     'submitresign.index',
+        //     'submitresign.create',
 
-            'kasbon.index',
-            'kasbon.create',
-            'kasbon.edit',
-            'kasbon.delete',
-        ]);
+        //     'kasbon.index',
+        //     'kasbon.create',
+        //     'kasbon.edit',
+        //     'kasbon.delete',
+        // ]);
         $employeeRole->givePermissionTo([
             'dashboard.employee',
             'attendance.scan',
@@ -163,6 +169,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'resignationrequest.create',
             'resignationrequest.index',
             'overtime.create',
+            'slippay.index',
+            'slippay.preview',
+            'slippay.download'
         ]);
 
 

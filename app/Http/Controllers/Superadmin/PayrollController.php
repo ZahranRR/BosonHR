@@ -183,7 +183,8 @@ class PayrollController extends Controller
 
 
             $workedDays = count($uniqueWorkDays);
-            $absentDays = max(0, $plannedWorkDays - $workedDays);
+            // $totalAbsent = max(0, $plannedWorkDays - $workedDays);
+            $totalAbsent = $this->calculateCustomAbsents($employee, $plannedWorkDays, $workedDays);
 
             $positionalAllowance = $employee->positional_allowance ?? 0;
             $transportAllowance = $employee->transport_allowance ?? 0;
@@ -192,7 +193,7 @@ class PayrollController extends Controller
             $overtimePay = $totalOvertimeHours * $hourlyRate;
             $totalSalary = $baseSalary + $overtimePay + $positionalAllowance + $transportAllowance + $bonusAllowance - $cashAdvance;
 
-            \Log::info("Payroll Summary | {$employee->first_name} {$employee->last_name} | Month: {$month} | Planned WorkDays: {$plannedWorkDays} | Actual WorkDays: {$workedDays} | Absent: {$absentDays} | Total Normal Hours: {$totalNormalHours} | Overtime Hours: {$totalOvertimeHours} | Base Salary: {$baseSalary} | Overtime Pay: {$overtimePay} | Total Salary: {$totalSalary}");
+            \Log::info("Payroll Summary | {$employee->first_name} {$employee->last_name} | Month: {$month} | Planned WorkDays: {$plannedWorkDays} | Actual WorkDays: {$workedDays} | Absent: {$totalAbsent} | Total Normal Hours: {$totalNormalHours} | Overtime Hours: {$totalOvertimeHours} | Base Salary: {$baseSalary} | Overtime Pay: {$overtimePay} | Total Salary: {$totalSalary}");
 
             $existing = Payroll::where('employee_id', $employee->employee_id)
                 ->where('month', $month)
@@ -206,7 +207,7 @@ class PayrollController extends Controller
                 $baseSalary,
                 $overtimePay,
                 $workedDays,
-                $absentDays,
+                $totalAbsent,
                 0,
                 $workedDays,
                 $lateCount,
@@ -247,7 +248,8 @@ class PayrollController extends Controller
             }
 
             $monthlyWorkdays = $this->calculateWorkdaysForMonth($divisionWorkDays, $month, $employee);
-            $totalAbsent = max(0, $monthlyWorkdays - $totalDaysWorked);
+            // $totalAbsent = max(0, $monthlyWorkdays - $totalDaysWorked);
+            $totalAbsent = $this->calculateCustomAbsents($employee, $monthlyWorkdays, $totalDaysWorked);
 
             // --- Hitung daily salary & hourly rate ---
             $dailySalary = $monthlyWorkdays > 0 ? $employee->current_salary / $monthlyWorkdays : 0;
@@ -350,7 +352,8 @@ class PayrollController extends Controller
                     $attendanceDeduction = $this->calculateAttendanceAllowance(
                         $employee,
                         $weeklyData,
-                        $attendanceAllowance
+                        $attendanceAllowance,
+                        $totalAbsent
                     );
                     $finalAllowance = $attendanceAllowance - $attendanceDeduction;
 
@@ -439,6 +442,67 @@ class PayrollController extends Controller
             'status' => 'Pending',
         ];
     }
+
+    private function calculateCustomAbsents($employee, $plannedWorkDays, $workedDays)
+    {
+        $divisionName = strtolower((string) optional($employee->division)->name);
+        $month = Carbon::parse(now())->format('Y-m');
+
+        //hitung absent kotor
+        $rawAbsent = max(0, $plannedWorkDays - $workedDays);
+
+        // ambil semua tanggal di bulan ini
+        $period = CarbonPeriod::create(
+            Carbon::parse($month)->startOfMonth(),
+            Carbon::parse($month)->endOfMonth()
+        );
+
+        // Tanggal hadir
+        $presentDates = $employee->attendanceLogs()
+            ->whereMonth('check_in', Carbon::parse($month)->month)
+            ->whereYear('check_in', Carbon::parse($month)->year)
+            ->pluck('check_in')
+            ->map(fn($d) => Carbon::parse($d)->toDateString())
+            ->unique()
+            ->toArray();
+
+        // Cari tanggal absen
+        $absentDates = [];
+        foreach ($period as $date) {
+            if (!in_array($date->toDateString(), $presentDates)) {
+                $absentDates[] = $date->copy();
+            }
+        }
+
+
+        // Hitung toleransi sesuai aturan divisi
+        $tolerance = 0;
+        if ($divisionName === 'supir') {
+            // libur 2x sebulan di hari Minggu
+            $sundayAbsents = collect($absentDates)->filter(fn($d) => $d->isSunday())->take(2);
+            $tolerance = $sundayAbsents->count();
+        } elseif ($divisionName === 'helper') {
+            // libur 1x sebulan di hari Minggu
+            $sundayAbsents = collect($absentDates)->filter(fn($d) => $d->isSunday())->take(1);
+            $tolerance = $sundayAbsents->count();
+        } elseif ($divisionName === 'kasir') {
+            // libur 2x sebulan di weekdays (Senin–Jumat)
+            $weekdayAbsents = collect($absentDates)
+                ->filter(fn($d) => $d->isWeekday()) // weekday = Mon–Fri
+                ->take(2);
+            $tolerance = $weekdayAbsents->count();
+        }
+
+        // Total absen final = absen kasar - toleransi
+        $totalAbsent = max(0, $rawAbsent - $tolerance);
+
+        \Log::info("[ABSENT] {$employee->first_name} {$employee->last_name} | Divisi: {$divisionName} | Raw Absent: {$rawAbsent} | Tolerance: {$tolerance} | Final Absent: {$totalAbsent}");
+
+        return $totalAbsent;
+    }
+
+
+
     private function calculateWorkdaysForMonth(array $effectiveDays, string $month, $employee = null): int
     {
         [$year, $monthNumber] = explode('-', $month);
@@ -457,27 +521,12 @@ class PayrollController extends Controller
         $period = CarbonPeriod::create($startDate, $endDate);
         $division = strtolower((string) optional($employee->division)->name);
 
-        // --- Precompute khusus Kasir: 2 weekday pertama libur ---
-        $kasirExtraOff = [];
-        if ($division === 'kasir') {
-            $kasirExtraOff = collect(CarbonPeriod::create($startDate, $endDate))
-                ->filter(fn($d) => in_array($d->format('l'), ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']))
-                ->take(2)
-                ->map(fn($d) => $d->format('Y-m-d'))
-                ->toArray();
-        }
-
-        $workdays = collect($period)->filter(function ($date) use ($effectiveDays, $holidayDates, $employee, $division, $kasirExtraOff) {
+        $workdays = collect($period)->filter(function ($date) use ($effectiveDays, $holidayDates, $employee, $division) {
             $dayName = $date->format('l');
             $dateStr = $date->format('Y-m-d');
 
             // Log awal
             // \Log::debug("[CHECK-DIVISION] {$employee->first_name} {$employee->last_name} | Division: {$division} | Day: {$dayName} | Date: {$dateStr}");
-
-            // Division khusus: tambahkan Sunday kalau perlu
-            if (in_array($division, ['supir', 'teknisi ac', 'kenek', 'helper']) && !in_array('Sunday', $effectiveDays)) {
-                $effectiveDays[] = 'Sunday';
-            }
 
             // Base workday check
             $isWorkday = in_array($dayName, $effectiveDays) && !in_array($dateStr, $holidayDates);
@@ -486,33 +535,33 @@ class PayrollController extends Controller
                 \Log::debug("[DEBUG] Skip National Holiday: {$dateStr} ({$dayName})");
             }
 
-            // --- Supir & Teknisi AC: skip Minggu genap ---
-            if ($isWorkday && in_array($division, ['supir', 'teknisi ac'])) {
-                if ($dayName === 'Sunday' && $date->weekOfMonth % 2 == 0) {
-                    \Log::debug("[DEBUG] Skip Sunday Genap ({$division}): {$dateStr}");
-                    $isWorkday = false;
-                }
-            }
+            // // --- Supir & Teknisi AC: skip Minggu genap ---
+            // if ($isWorkday && in_array($division, ['supir', 'teknisi ac'])) {
+            //     if ($dayName === 'Sunday' && $date->weekOfMonth % 2 == 0) {
+            //         \Log::debug("[DEBUG] Skip Sunday Genap ({$division}): {$dateStr}");
+            //         $isWorkday = false;
+            //     }
+            // }
 
-            // --- Kenek & Helper: skip Minggu terakhir ---
-            if ($isWorkday && in_array($division, ['kenek', 'helper'])) {
-                if ($dayName === 'Sunday') {
-                    $lastSunday = Carbon::create($date->year, $date->month, 1)
-                        ->endOfMonth()
-                        ->previous('Sunday')
-                        ->format('Y-m-d');
-                    if ($dateStr === $lastSunday) {
-                        \Log::debug("[DEBUG] Skip Last Sunday ({$division}): {$dateStr}");
-                        $isWorkday = false;
-                    }
-                }
-            }
+            // // --- Kenek & Helper: skip Minggu terakhir ---
+            // if ($isWorkday && in_array($division, ['kenek', 'helper'])) {
+            //     if ($dayName === 'Sunday') {
+            //         $lastSunday = Carbon::create($date->year, $date->month, 1)
+            //             ->endOfMonth()
+            //             ->previous('Sunday')
+            //             ->format('Y-m-d');
+            //         if ($dateStr === $lastSunday) {
+            //             \Log::debug("[DEBUG] Skip Last Sunday ({$division}): {$dateStr}");
+            //             $isWorkday = false;
+            //         }
+            //     }
+            // }
 
-            // --- Kasir: 2 weekday libur tiap bulan ---
-            if ($isWorkday && $division === 'kasir' && in_array($dateStr, $kasirExtraOff)) {
-                \Log::debug("[DEBUG] Kasir extra weekday off: {$dateStr}");
-                $isWorkday = false;
-            }
+            // // --- Kasir: 2 weekday libur tiap bulan ---
+            // if ($isWorkday && $division === 'kasir' && in_array($dateStr, $kasirExtraOff)) {
+            //     \Log::debug("[DEBUG] Kasir extra weekday off: {$dateStr}");
+            //     $isWorkday = false;
+            // }
 
             if ($isWorkday) {
                 \Log::debug("[DEBUG] Workday: {$dateStr} ({$dayName})");
@@ -532,7 +581,7 @@ class PayrollController extends Controller
         $startDate = Carbon::create($year, $monthNumber, 1)->startOfMonth();
         $endDate   = Carbon::create($year, $monthNumber, 1)->endOfMonth();
 
-        // Ambil tanggal libur nasional
+        // Ambil libur nasional
         $holidayDates = Event::where('category', 'danger')
             ->whereBetween('start_date', [$startDate, $endDate])
             ->get()
@@ -550,62 +599,29 @@ class PayrollController extends Controller
 
         $weeklyData = [];
         $period = CarbonPeriod::create($startDate, $endDate);
-        $division = strtolower((string) optional($employee->division)->name);
-
-        $kasirExtraOff = [];
-        if ($division === 'kasir') {
-            $kasirExtraOff = collect(CarbonPeriod::create($startDate, $endDate))
-                ->filter(fn($d) => in_array($d->format('l'), ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']))
-                ->take(2)
-                ->map(fn($d) => $d->format('Y-m-d'))
-                ->toArray();
-        }
 
         foreach ($period as $date) {
             $dayName = $date->format('l');
             $weekNum = $date->weekOfMonth;
             $dateStr = $date->format('Y-m-d');
 
-            // cek hari kerja
+            // hanya cek hari kerja & bukan libur nasional
             if (!in_array($dayName, $effectiveDays)) continue;
             if (in_array($dateStr, $holidayDates)) continue;
 
-            // skip 2 weekday off untuk kasir
-            if ($division === 'kasir' && in_array($dateStr, $kasirExtraOff)) {
-                \Log::debug("[SKIP] Kasir extra weekday off {$dateStr}");
-                continue;
-            }
-
-            // Supir & Teknisi AC → skip Minggu genap
-            if (in_array($division, ['supir', 'teknisi ac']) && $dayName === 'Sunday' && $weekNum % 2 === 0) {
-                \Log::debug("[SKIP] {$employee->first_name} {$employee->last_name} skip Sunday genap {$dateStr}");
-                continue;
-            }
-
-            // Kenek & Helper → skip Minggu terakhir
-            if (in_array($division, ['kenek', 'helper']) && $dayName === 'Sunday') {
-                $lastSunday = Carbon::create($date->year, $date->month, 1)
-                    ->endOfMonth()
-                    ->previous('Sunday')
-                    ->format('Y-m-d');
-                if ($dateStr === $lastSunday) {
-                    \Log::debug("[SKIP] {$employee->first_name} {$employee->last_name} skip last Sunday {$dateStr}");
-                    continue;
-                }
-            }
-
-            // Tentukan hadir/tidak hadir
+            // Apakah hadir hari ini?
             $attended = isset($attendances[$dateStr]);
+
             $weeklyData[$weekNum][$dayName] = $attended;
 
-            \Log::debug(message: "[WeeklyData] {$employee->first_name} {$employee->last_name} | {$dateStr} ({$dayName}) | Week {$weekNum} | Attended: " . ($attended ? 'Yes' : 'No'));
+            \Log::debug("[WeeklyData] {$employee->first_name} {$employee->last_name} | {$dateStr} ({$dayName}) | Week {$weekNum} | Attended: " . ($attended ? 'Yes' : 'No'));
         }
 
         return $weeklyData;
     }
 
 
-    private function calculateAttendanceAllowance($employee, $weeklyData, $baseAllowance)
+    private function calculateAttendanceAllowance($employee, $weeklyData, $baseAllowance, $finalAbsent = null)
     {
 
         $division = strtolower((string) optional($employee->division)->name);
@@ -615,9 +631,27 @@ class PayrollController extends Controller
         foreach ($weeklyData as $weekNum => $days) {
             $absencesPerWeek[(int)$weekNum] = count(array_filter($days, fn($attended) => !$attended));
         }
-        $totalAbsents = array_sum($absencesPerWeek);
+        $rawAbsents = array_sum($absencesPerWeek);
 
-        // 📌 Kasir & Admin pakai aturan langsung per absen
+        $totalAbsents = $finalAbsent ?? $rawAbsents;
+
+        //  Kalau ada finalAbsent, distribusikan ke absencesPerWeek
+        if ($finalAbsent !== null) {
+            $rawTotal = array_sum($absencesPerWeek);
+            if ($rawTotal > 0 && $finalAbsent < $rawTotal) {
+                // kurangi dari minggu terakhir yang punya absen
+                $reduce = $rawTotal - $finalAbsent;
+                foreach (array_reverse(array_keys($absencesPerWeek)) as $week) {
+                    if ($reduce <= 0) break;
+                    if ($absencesPerWeek[$week] > 0) {
+                        $absencesPerWeek[$week] -= 1;
+                        $reduce--;
+                    }
+                }
+            }
+        }
+
+        //  Kasir & Admin pakai aturan langsung per absen
         if (in_array($division, ['kasir', 'admin wholesale', 'admin retail', 'admin operasional retail'])) {
             if ($totalAbsents > 3) {
                 // allowance hangus total
@@ -634,9 +668,9 @@ class PayrollController extends Controller
             return $deduction;
         }
 
-        // 📌 Divisi lain tetap pakai scheme weekly share
+        //  Divisi lain tetap pakai scheme weekly share
         $maxAbsent = 4; // supir/helper/teknisi ac
-        if ($totalAbsents > $maxAbsent) {
+        if ($totalAbsents >= $maxAbsent) {
             \Log::info("AttendanceAllowance | {$employee->first_name} {$employee->last_name} | {$division} | Absent {$totalAbsents}x > {$maxAbsent} → allowance hangus total.");
             return $baseAllowance; // deduction penuh
         }
@@ -648,10 +682,11 @@ class PayrollController extends Controller
         $lostShares = $scheme['lostShares'];
         $lostAllFull = $scheme['lostAllFull'];
 
-        $deduction = 0;
-        foreach ($lostShares as $w => $val) {
-            $deduction += (float)$val;
-        }
+        $deduction = array_sum($lostShares);
+        // $deduction = 0;
+        // foreach ($lostShares as $w => $val) {
+        //     $deduction += (float)$val;
+        // }
 
         if ($lostAllFull) {
             $allFullOriginal = $baseAllowance - (4 * ($baseAllowance / 6));
@@ -682,12 +717,6 @@ class PayrollController extends Controller
 
         // Proses hanya untuk minggu yang relevan (1..4)
         foreach ($absencesPerWeek as $week => $absenceCount) {
-            // if ($week < 1 || $week > 4) {
-            //     // absen di luar minggu share → hitung untuk prorata
-            //     $extraAbsencesOnNonShareWeeks += max(0, (int)$absenceCount);
-            //     continue;
-            // }
-
             $absenceCount = max(0, (int)$absenceCount);
 
             if ($absenceCount >= 1) {
@@ -695,22 +724,22 @@ class PayrollController extends Controller
                 if (isset($shares[$week]) && $shares[$week] > 0) {
                     $lostShares[$week] = $shares[$week];
                     $shares[$week] = 0;
-                } else {
-                    // jika absen di minggu di luar share (misal week 5) → treat sebagai 1 share hilang
-                    // $extraAbsencesOnNonShareWeeks += $absenceCount;
-                    $lostShares[$week] = $weekShare;
                 }
-
                 $lostAllFull = true; // allFull hangus
             }
 
-            if ($absenceCount >= 2 && $week >= 1 && $week <= 4) {
-                // minggu berikutnya hangus juga
+            if ($absenceCount === 2) {
+                // minggu ini + minggu berikutnya hangus
+                if (isset($shares[$week]) && $shares[$week] > 0) {
+                    $lostShares[$week] = $shares[$week];
+                    $shares[$week] = 0;
+                }
                 $next = $week + 1;
                 if (isset($shares[$next]) && $shares[$next] > 0) {
                     $lostShares[$next] = $shares[$next];
                     $shares[$next] = 0;
                 }
+                $lostAllFull = true;
             }
 
             if ($absenceCount >= 3) {
