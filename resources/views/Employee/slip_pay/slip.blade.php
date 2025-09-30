@@ -43,21 +43,21 @@
 
     <p class="section-title">PENERIMAAN</p>
     <table>
-        <tr><td>Gaji Pokok</td><td class="right">Rp {{ number_format($payroll->current_salary,0,',','.') }}</td></tr>
+        <tr><td>Gaji Pokok</td><td class="right">Rp {{ number_format($payroll->base_salary,0,',','.') }}</td></tr>
         <tr><td>Tunjangan Jabatan</td><td class="right">Rp {{ number_format($payroll->positional_allowance ?? 0,0,',','.') }}</td></tr>
         <tr><td>Tunjangan Transportasi</td><td class="right">Rp {{ number_format($payroll->transport_allowance ?? 0,0,',','.') }}</td></tr>
         <tr><td>Tunjangan Kehadiran</td><td class="right">Rp {{ number_format($payroll->attendance_allowance ?? 0,0,',','.') }}</td></tr>
         <tr><td>Lembur</td><td class="right">Rp {{ number_format($payroll->overtime_pay,0,',','.') }}</td></tr>
         <tr><td>Bonus</td><td class="right">Rp {{ number_format($payroll->bonus ?? 0,0,',','.') }}</td></tr>
-        <tr class="total"><td>Total Penerimaan</td><td class="right">Rp {{ number_format(($payroll->current_salary + ($payroll->attendance_allowance ?? 0) + $payroll->overtime_pay + ($payroll->bonus ?? 0) + $payroll->positional_allowance + $payroll->transport_allowance),0,',','.') }}</td></tr>
+        <tr class="total"><td>Total Penerimaan</td><td class="right">Rp {{ number_format(($payroll->base_salary + ($payroll->attendance_allowance ?? 0) + $payroll->overtime_pay + ($payroll->bonus ?? 0) + $payroll->positional_allowance + $payroll->transport_allowance),0,',','.') }}</td></tr>
     </table>
 
     <p class="section-title">PENGURANGAN</p>
     <table>
         <tr><td>Kasbon</td><td class="right">Rp {{ number_format($payroll->cash_advance,0,',','.') }}</td></tr>
         <tr><td>Potongan Telat</td><td class="right">Rp {{ number_format($payroll->deduction ?? 0,0,',','.') }}</td></tr>
-        <tr><td>Potongan Absent</td><td class="right">Rp {{ number_format($payroll->deduction ?? 0,0,',','.') }}</td></tr>
-        <tr class="total"><td>Total Pengurangan</td><td class="right">Rp {{ number_format(($payroll->cash_advance + ($payroll->deduction ?? 0)),0,',','.') }}</td></tr>
+        <tr><td>Potongan Absent</td><td class="right">Rp {{ number_format($payroll->absent_deduction ?? 0,0,',','.') }}</td></tr>
+        <tr class="total"><td>Total Pengurangan</td><td class="right">Rp {{ number_format(($payroll->cash_advance ?? 0) + ($payroll->deduction ?? 0) + ($payroll->absent_deduction ?? 0)    ,0,',','.') }}</td></tr>
     </table>
 
     <p class="section-title">TOTAL DITERIMA KARYAWAN</p>
