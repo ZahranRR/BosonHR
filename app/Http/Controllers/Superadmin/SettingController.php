@@ -33,11 +33,13 @@ class SettingController extends Controller
     {
         $validatedData = $request->validate([
             'name_company' => 'required|string|max:255',
+            'company_address' =>'required|string|max:255',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
         ]);
 
         $company = new CompanyName();
         $company->name_company = $validatedData['name_company'];
+        $company->company_address = $validatedData['company_address'];
 
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('company_images', 'public');
@@ -53,11 +55,13 @@ class SettingController extends Controller
     {
         $validatedData = $request->validate([
             'name_company' => 'required|string|max:255',
+            'company_address' =>'required|string|max:255',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
         ]);
 
         $company = CompanyName::findOrFail($id);
         $company->name_company = $validatedData['name_company'];
+        $company->company_address = $validatedData['company_address'];
 
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('company_images', 'public');

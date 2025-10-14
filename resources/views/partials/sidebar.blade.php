@@ -317,6 +317,9 @@
                         <a href="{{ route('overtime.approvals') }}" class="nav-link ">
                             <i class="far fa-circle nav-icon"></i>
                             <p>Overtime Approval</p>
+                            @if ($pendingOvertimeCount > 0)
+                            <span class="right badge badge-danger">{{ $pendingOvertimeCount }}</span>
+                            @endif
                         </a>
                     </li>
                 @endcan

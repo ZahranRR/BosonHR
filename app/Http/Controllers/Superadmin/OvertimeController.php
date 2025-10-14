@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Overtime;
 use App\Models\Role;
 use App\Models\User;
+use Google\Service\AnalyticsData\OrderBy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -25,7 +26,9 @@ class OvertimeController extends Controller
         // Mengambil data overtime untuk employee yang sedang login
         $overtimes = Overtime::whereHas('employee', function ($query) {
             $query->where('employee_id', auth()->user()->employee->employee_id); // Sesuaikan dengan 'employee_id' atau 'id' sesuai data Anda
-        })->get();
+        })
+        ->orderBy('overtime_date', 'desc')
+        ->get();
 
         return view('Superadmin.overtime.index', compact('overtimes'));
 
@@ -54,33 +57,33 @@ class OvertimeController extends Controller
 
     public function store(Request $request)
     {
-        try {
-            // Validasi data overtime
-            $request->validate([
-                'overtime_date' => [
-                    'required',
-                    'date',
-                    function ($attribute, $value, $fail) {
-                        // Validasi apakah sudah ada overtime pada tanggal yang sama
-                        $existingOvertime = Overtime::whereHas('employee', function ($query) {
-                            $query->where('employee_id', Auth::user()->employee->employee_id);  // Menggunakan employee_id dari user yang sedang login
-                        })
-                            ->where('overtime_date', $value)  // Mencari overtime yang sudah ada pada tanggal yang sama
-                            ->whereIn('status', ['pending', 'approved'])  // Mengecek jika statusnya pending atau approved
-                            ->exists();
+        // Validasi data overtime
+        $request->validate([
+            'overtime_date' => [
+                'required',
+                'date',
+                function ($attribute, $value, $fail) {
+                    // Validasi apakah sudah ada overtime pada tanggal yang sama
+                    $existingOvertime = Overtime::whereHas('employee', function ($query) {
+                        $query->where('employee_id', Auth::user()->employee->employee_id);  // Menggunakan employee_id dari user yang sedang login
+                    })
+                        ->where('overtime_date', $value)  // Mencari overtime yang sudah ada pada tanggal yang sama
+                        ->whereIn('status', ['pending', 'approved'])  // Mengecek jika statusnya pending atau approved
+                        ->exists();
 
-                        if ($existingOvertime) {
-                            session()->flash('error', 'You already have an overtime request for this date.');
-                            $fail('You already have an overtime request for this date.');
-                        }
+                    if ($existingOvertime) {
+                        session()->flash('error', 'You already have an overtime request for this date.');
+                        $fail('You already have an overtime request for this date.');
                     }
-                ],
-                'duration' => 'required|integer|in:1,2',
-                'notes' => 'required|string|max:255',
-                'manager_id' => 'required|exists:users,user_id',
-                'attachment' => 'required|image|mimes:jpg,jpeg,png|max:2048',
-            ]);
+                }
+            ],
+            'duration' => 'required|integer|in:1,2',
+            'notes' => 'required|string|max:255',
+            'manager_id' => 'required|exists:users,user_id',
+            'attachment' => 'required|image|mimes:jpg,jpeg,png|max:2048',
+        ]);
 
+        try {
             // Simpan file jika ada
             if ($request->hasFile('attachment')) {
                 $attachmentPath = $request->file('attachment')->store('overtime_attachments', 'public');

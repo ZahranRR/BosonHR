@@ -11,6 +11,7 @@ use Spatie\Permission\Models\Role as SpatieRole;
 use App\Models\Attandance;
 use App\Observers\AttandanceObserver;
 use App\Models\Offrequest;
+use App\Models\Overtime;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -40,6 +41,12 @@ class AppServiceProvider extends ServiceProvider
             if (auth()->check() && auth()->user()->can('offrequest.approver')) {
                 $pendingCount = \App\Models\Offrequest::where('status', 'pending')->count();
                 $view->with('pendingCount', $pendingCount);
+            }
+            if (auth()->check() && auth()->user()->can('overtime.approvals')) {
+                $pendingOvertimeCount = \App\Models\Overtime::where('status', 'pending')
+                    ->where('manager_id',auth()->id())
+                    ->count();
+                $view->with('pendingOvertimeCount', $pendingOvertimeCount);
             }
         });
     }

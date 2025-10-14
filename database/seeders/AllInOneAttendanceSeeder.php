@@ -8,61 +8,65 @@ use App\Models\Division;
 use App\Models\Attandance;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+use Illuminate\Support\Facades\Log;
+
 
 class AllInOneAttendanceSeeder extends Seeder
 {
     public function run()
     {
-        $month = '2025-09';
+        date_default_timezone_set('Asia/Jakarta');
+
+        $month = '2025-10';
         [$year, $monthNumber] = explode('-', $month);
 
-        $startDate = Carbon::create($year, $monthNumber, 1)->startOfMonth();
-        $endDate   = Carbon::create($year, $monthNumber, 1)->endOfMonth();
+        $startDate = Carbon::createFromDate($year, $monthNumber, 1, 'Asia/Jakarta')->startOfMonth();
+        $endDate   = Carbon::createFromDate($year, $monthNumber, 1, 'Asia/Jakarta')->endOfMonth();
         $period    = CarbonPeriod::create($startDate, $endDate);
 
         $divisions = [
             'Admin Wholesale' => [
-                'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+                'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
             ],
             'Admin Retail' => [
-                'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+                'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
                 'check_in' => '09:00',
                 'check_out' => '17:00',
             ],
             'Admin Operasional Retail' => [
-                'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+                'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
             ],
             'Kasir' => [
-                'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+                'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
             ],
             'Supir' => [
-                'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+                'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
             ],
             'Kenek' => [
-                'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+                'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
             ],
             'Helper' => [
-                'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+                'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
             ],
             'Teknisi AC' => [
-                'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+                'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
             ],
-            'freelance admin' => [
-                'days' => ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+            'Freelance Admin' => [
+                'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
                 'check_in' => '09:00',
                 'check_out' => '18:00',
             ],
@@ -83,44 +87,100 @@ class AllInOneAttendanceSeeder extends Seeder
                 }
             }
 
-            // Tentukan berapa hari absen random untuk divisi ini (0–6 hari)
-            $absentCount = rand(0, 6);
-            $absentDays = [];
-            if ($absentCount > 0 && count($workDates) >= $absentCount) {
-                $absentKeys = (array) array_rand($workDates, $absentCount);
-                $absentDays = array_map(fn($key) => $workDates[$key], $absentKeys);
-            }
-
-            // --- Generate attendance untuk semua karyawan di divisi ---
+            // --- Generate attendance untuk setiap employee ---
             foreach ($employees as $employee) {
-                foreach ($workDates as $dateStr) {
-                    if (in_array($dateStr, $absentDays)) {
-                        continue; // ❌ skip → dianggap absen
-                    }
+                $divisionName = strtolower($divisionName);
 
-                    $date = Carbon::parse($dateStr);
+                // 1️⃣ ambil semua tanggal kerja default dari divisi
+                $employeeWorkDates = $workDates;
+
+                // 2️⃣ terapkan aturan toleransi libur agar hasil payroll match
+                if ($divisionName === 'supir') {
+                    // libur 2x hari Minggu
+                    $sundays = collect($employeeWorkDates)
+                        ->filter(fn($d) => Carbon::parse($d)->isSunday())
+                        ->values();
+                    if ($sundays->count() > 2) {
+                        $skipSundays = $sundays->random(2);
+                        $employeeWorkDates = array_diff($employeeWorkDates, $skipSundays->toArray());
+                        Log::debug("[Seeder] {$employee->first_name} {$employee->last_name} | Supir libur Minggu: " . implode(', ', $skipSundays->toArray()));
+                    }
+                } elseif ($divisionName === 'teknisi ac') {
+                    // libur 2x hari Minggu
+                    $sundays = collect($employeeWorkDates)
+                        ->filter(fn($d) => Carbon::parse($d)->isSunday())
+                        ->values();
+                    if ($sundays->count() > 2) {
+                        $skipSundays = $sundays->random(2);
+                        $employeeWorkDates = array_diff($employeeWorkDates, $skipSundays->toArray());
+                        Log::debug("[Seeder] {$employee->first_name} {$employee->last_name} | Supir libur Minggu: " . implode(', ', $skipSundays->toArray()));
+                    }
+                } elseif ($divisionName === 'helper') {
+                    // libur 1x hari Minggu
+                    $sundays = collect($employeeWorkDates)
+                        ->filter(fn($d) => Carbon::parse($d)->isSunday())
+                        ->values();
+                    if ($sundays->count() > 0) {
+                        $skipSunday = $sundays->random(1);
+                        $employeeWorkDates = array_diff($employeeWorkDates, $skipSunday->toArray());
+                        Log::debug("[Seeder] {$employee->first_name} {$employee->last_name} | Helper libur Minggu: " . implode(', ', $skipSunday->toArray()));
+                    }
+                } elseif ($divisionName === 'kenek') {
+                    // libur 1x hari Minggu
+                    $sundays = collect($employeeWorkDates)
+                        ->filter(fn($d) => Carbon::parse($d)->isSunday())
+                        ->values();
+                    if ($sundays->count() > 0) {
+                        $skipSunday = $sundays->random(1);
+                        $employeeWorkDates = array_diff($employeeWorkDates, $skipSunday->toArray());
+                        Log::debug("[Seeder] {$employee->first_name} {$employee->last_name} | Helper libur Minggu: " . implode(', ', $skipSunday->toArray()));
+                    }
+                } elseif ($divisionName === 'kasir') {
+                    // libur 2x weekdays
+                    $weekdays = collect($employeeWorkDates)
+                        ->filter(fn($d) => Carbon::parse($d)->isWeekday())
+                        ->values();
+                    if ($weekdays->count() > 2) {
+                        $skipWeekdays = $weekdays->random(2);
+                        $employeeWorkDates = array_diff($employeeWorkDates, $skipWeekdays->toArray());
+                        Log::debug("[Seeder] {$employee->first_name} {$employee->last_name} | Kasir libur weekday: " . implode(', ', $skipWeekdays->toArray()));
+                    }
+                }
+
+                // 3️⃣ random absen tambahan (simulasi karyawan bolos)
+                $absentCount = rand(0, 5);
+                $absentDays = [];
+                if ($absentCount > 0 && count($employeeWorkDates) >= $absentCount) {
+                    $absentKeys = (array) array_rand($employeeWorkDates, $absentCount);
+                    $absentDays = array_map(fn($key) => $employeeWorkDates[$key], $absentKeys);
+                }
+
+                // 4️⃣ buat attendance (skip hari libur & absen)
+                foreach ($employeeWorkDates as $dateStr) {
+                    if (in_array($dateStr, $absentDays)) continue;
+
+                    $date = Carbon::parse($dateStr, 'Asia/Jakarta');
 
                     // Jam masuk 09:00–09:30
-                    $checkInHour = 9;
                     $checkInMinute = rand(0, 30);
-                    $checkIn = $date->copy()->setTime($checkInHour, $checkInMinute);
+                    $checkIn = $date->copy()->setTime(9, $checkInMinute);
 
-                    // Jam keluar sesuai divisi + extra 0–120 menit
-                    $baseOut = Carbon::parse($date->format('Y-m-d') . ' ' . $config['check_out']);
+                    // Jam keluar + tambahan 0–120 menit
+                    $baseOut = Carbon::parse("{$dateStr} {$config['check_out']}", 'Asia/Jakarta');
                     $checkOut = $baseOut->copy()->addMinutes(rand(0, 120));
 
                     $checkInStatus = ($checkInMinute > 15) ? 'LATE' : 'IN';
                     $checkOutStatus = ($checkOut->lt($baseOut)) ? 'EARLY' : 'OUT';
 
-                    $alreadyExists = Attandance::where('employee_id', $employee->employee_id)
+                    if (!Attandance::where('employee_id', $employee->employee_id)
+                        ->whereYear('check_in', $year)
+                        ->whereMonth('check_in', $monthNumber)
                         ->whereDate('check_in', $dateStr)
-                        ->exists();
-
-                    if (!$alreadyExists) {
+                        ->exists()) {
                         Attandance::create([
                             'employee_id'      => $employee->employee_id,
-                            'check_in'         => $checkIn,
-                            'check_out'        => $checkOut,
+                            'check_in'         => $checkIn->format('Y-m-d H:i:s'),
+                            'check_out'        => $checkOut->format('Y-m-d H:i:s'),
                             'check_in_status'  => $checkInStatus,
                             'check_out_status' => $checkOutStatus,
                             'image'            => null,

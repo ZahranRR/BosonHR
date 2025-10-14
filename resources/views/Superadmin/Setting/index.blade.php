@@ -23,6 +23,12 @@
                         </div>
 
                         <div class="form-group mb-4">
+                            <label for="company_address" class="form-label">Company Address</label>
+                            <input type="text" class="form-control" name="company_address" id="company_address"
+                                value="{{ isset($companyname) ? $companyname->company_address : '' }}" required>
+                        </div>
+
+                        <div class="form-group mb-4">
                             <label for="image" class="form-label">Company Image</label>
                             <div class="custom-file">
                                 <input type="file" class="custom-file-input" name="image" id="image" accept="image/*">
@@ -72,7 +78,7 @@
             </div>
         @endcan
 
-        @can('settings.worksdays')
+        {{-- @can('settings.worksdays')
             <div class="card mt-4">
                 <div class="card-header bg-primary">
                     <h3 class="card-title">Workday Settings</h3>
@@ -95,7 +101,7 @@
                     </form>
                 </div>
             </div>
-        @endcan
+        @endcan --}}
     </section>
 
     <script>

@@ -107,13 +107,10 @@
                             <td class="text-right">Rp. {{ number_format($data['total_salary'], 0, ',', '.') }}</td>
 
                             <td class="text-center">
-                                <button class="btn btn-sm btn-primary add-kasbon-btn"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#kasbonModal"
-                                    data-id="{{ $data['payroll_id'] ?? '' }}"
-                                    data-cash-advance="{{ $data['cash_advance'] ?? '' }}">
+                                <a href="{{ route('kasbon.create', ['id' => $data['id']]) }}" 
+                                    class="btn btn-sm btn-primary">
                                     {{ ($data['cash_advance'] > 0) ? 'Edit Kasbon' : 'Add Kasbon' }}
-                                </button>
+                                 </a>
                             </td>
 
                             <td class="text-center">

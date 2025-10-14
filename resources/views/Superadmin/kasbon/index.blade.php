@@ -4,7 +4,7 @@
 @section('content')
 <section class="content">
 
-    {{-- Modal Kasbon --}}
+    {{-- Modal Kasbon
     <div class="modal fade" id="kasbonModal" tabindex="-1" aria-labelledby="kasbonModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -30,7 +30,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </div> --}}
 
     {{-- Card Kasbon --}}
     <div class="card">
@@ -57,26 +57,36 @@
                 <table class="table table-striped projects">
                     <thead>
                         <tr>
-                            <th style="width: 20%">Employee Name</th>
-                            <th style="width: 15%" class="text-center">Current Salary</th>
-                            <th style="width: 15%" class="text-center text-danger">Cash Advance</th>
-                            <th style="width: 15%" class="text-center">Total Salary</th>
-                            <th style="width: 15%" class="text-center">Action</th>
+                            <th style="width: 10%">Employee Name</th>
+                            <th style="width: 10%" class="text-center">Current Salary</th>
+                            <th style="width: 10%" class="text-center">Total Amount</th>
+                            <th style="width: 10%" class="text-center">Installments</th>
+                            <th style="width: 10%" class="text-center">Per Installments</th>
+                            <th style="width: 10%" class="text-center">Remaining</th>
+                            <th style="width: 10%" class="text-center">Start Month</th>
+                            <th style="width: 10%" class="text-center">Status</th>
+                            {{-- <th style="width: 15%" class="text-center">Action</th> --}}
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($kasbon as $data)
+                        @forelse ($kasbon as $c)
                         <tr>
-                            <td>{{ $data->employee->first_name }} {{ $data->employee->last_name }}</td>
-                            <td class="text-right">Rp. {{ number_format($data->current_salary, 0, ',', '.') }}</td>
-
-                            <td class="text-right text-danger" id="cash-advance-{{ $data->id }}">
-                                Rp. {{ number_format($data->cash_advance, 0, ',', '.') }}
-                            </td>
-
-                            <td class="text-right">Rp. {{ number_format($data->total_salary, 0, ',', '.') }}</td>
-
+                            <td>{{ $c->employee->first_name }} {{ $c->employee->last_name }}</td>
+                            <td class="text-center">Rp. {{ number_format($c->employee->current_salary, 0, ',', '.') }}</td>
+                            <td class="text-center">Rp. {{ number_format($c->total_amount, 0, ',', '.') }}</td>
+                            <td class="text-center">{{$c->installments}}</td>
+                            <td class="text-center">Rp. {{ number_format($c->installment_amount, 0, ',', '.') }}</td>
+                            <td class="text-center">{{ number_format($c->remaining_installment, 0, ',', '.') }}</td>
+                            <td class="text-center">{{$c->start_month}}</td>
                             <td class="text-center">
+                                <span class="badge
+                                    @if($c->status =='ongoing') bg-warning
+                                    @elseif ($C->status == 'completed') bg-success
+                                    @else bg-danger @endif">
+                                    {{ ucfirst($c->status) }}
+                                </span>
+                            </td>
+                            {{-- <td class="text-center">
                                 <button class="btn btn-sm btn-primary add-kasbon-btn"
                                     data-bs-toggle="modal"
                                     data-bs-target="#kasbonModal"
@@ -84,11 +94,11 @@
                                     data-cash-advance="{{ $data->cash_advance }}">
                                     {{ ($data->cash_advance > 0) ? 'Edit Kasbon' : 'Add Kasbon' }}
                                 </button>
-                            </td>
+                            </td> --}}
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" class="text-center">Tidak ada data kasbon.</td>
+                            <td colspan="8" class="text-center">Tidak ada data kasbon.</td>
                         </tr>
                         @endforelse
                     </tbody>
