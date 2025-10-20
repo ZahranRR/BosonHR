@@ -231,6 +231,21 @@ class EmployeeController extends Controller
                 Log::info('attendance_allowance cleaned', ['attendance_allowance' => $validatedData['attendance_allowance']]);
             }
 
+            if (isset($request->positional_allowance)) {
+                $validatedData['positional_allowance'] = (int) str_replace('.', '', $request->positional_allowance);
+                Log::info('positional_allowance cleaned', ['positional_allowance' => $validatedData['positional_allowance']]);
+            }
+
+            if (isset($request->transport_allowance)) {
+                $validatedData['transport_allowance'] = (int) str_replace('.', '', $request->transport_allowance);
+                Log::info('transport_allowance cleaned', ['transport_allowance' => $validatedData['transport_allowance']]);
+            }
+
+            if (isset($request->bonus_allowance)) {
+                $validatedData['bonus_allowance'] = (int) str_replace('.', '', $request->bonus_allowance);
+                Log::info('bonus_allowance cleaned', ['bonus_allowance' => $validatedData['bonus_allowance']]);
+            }
+
             // FILE
             if ($request->hasFile('cv_file')) {
                 $file = $request->file('cv_file');

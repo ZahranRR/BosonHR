@@ -76,25 +76,16 @@
                             <td class="text-center">Rp. {{ number_format($c->total_amount, 0, ',', '.') }}</td>
                             <td class="text-center">{{$c->installments}}</td>
                             <td class="text-center">Rp. {{ number_format($c->installment_amount, 0, ',', '.') }}</td>
-                            <td class="text-center">{{ number_format($c->remaining_installment, 0, ',', '.') }}</td>
+                            <td class="text-center">{{ number_format($c->remaining_installments, 0, ',', '.') }}</td>
                             <td class="text-center">{{$c->start_month}}</td>
                             <td class="text-center">
                                 <span class="badge
                                     @if($c->status =='ongoing') bg-warning
-                                    @elseif ($C->status == 'completed') bg-success
+                                    @elseif ($c->status == 'completed') bg-success
                                     @else bg-danger @endif">
                                     {{ ucfirst($c->status) }}
                                 </span>
                             </td>
-                            {{-- <td class="text-center">
-                                <button class="btn btn-sm btn-primary add-kasbon-btn"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#kasbonModal"
-                                    data-id="{{ $data->id }}"
-                                    data-cash-advance="{{ $data->cash_advance }}">
-                                    {{ ($data->cash_advance > 0) ? 'Edit Kasbon' : 'Add Kasbon' }}
-                                </button>
-                            </td> --}}
                         </tr>
                         @empty
                         <tr>

@@ -122,4 +122,9 @@ class Employee extends Model
     {
         return $this->belongsTo(Division::class, 'division_id', 'id');
     }
+
+    public function cashAdvances()
+    {
+        return $this->hasMany(CashAdvance::class, 'employee_id', 'employee_id');
+    }
 }

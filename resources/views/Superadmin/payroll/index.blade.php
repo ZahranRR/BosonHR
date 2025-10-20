@@ -107,20 +107,20 @@
                             <td class="text-right">Rp. {{ number_format($data['total_salary'], 0, ',', '.') }}</td>
 
                             <td class="text-center">
-                                <a href="{{ route('kasbon.create', ['id' => $data['id']]) }}" 
+                                <a href="{{ route('kasbon.create', ['id' => $data['employee_id'] ?? $data['id'] ?? null]) }}" 
                                     class="btn btn-sm btn-primary">
                                     {{ ($data['cash_advance'] > 0) ? 'Edit Kasbon' : 'Add Kasbon' }}
                                  </a>
                             </td>
 
                             <td class="text-center">
-                                @if ($data['status'] === 'Pending')
-                                <form method="POST" action="{{ route('payroll.approve', $data['id']) }}"
-                                    style="display: inline;" id="approve-form-{{ $data['id'] }}">
+                                @if (strtolower($data['status']) === 'pending')
+                                <form method="POST" action="{{ route('payroll.approve', $data['payroll_id']) }}"
+                                    style="display: inline;" id="approve-form-{{ $data['payroll_id'] }}">
                                     @csrf
                                     @method('PUT')
                                     <button type="button" class="btn btn-success btn-sm"
-                                        onclick="confirmApprove({{ $data['id'] }})">Approve</button>
+                                        onclick="confirmApprove({{ $data['payroll_id'] }})">Approve</button>
                                 </form>
                                 @else
                                 <span class="badge badge-success">Approved</span>
@@ -140,13 +140,7 @@
 </section>
 
 
-<!-- <script>
-    $(document).ready(function() {
-        $('.js-example-basic-multiple').select2();
-    });
-</script>  -->
-
-<script>
+{{-- <script>
     function confirmApprove(id) {
         Swal.fire({
             title: 'Are you sure?',
@@ -158,14 +152,45 @@
             reverseButtons: true
         }).then((result) => {
             if (result.isConfirmed) {
-                document.getElementById('approve-form-' + id).submit();
-                Swal.fire('Approved!', 'The payroll has been approved.', 'success');
+                $.ajax({
+                    url: `/Superadmin/payroll/approve/${id}`,
+                    method: 'PUT',
+                    data: { _token: '{{ csrf_token() }}' },
+                    success: function(res) {
+                        Swal.fire('Approved!', 'The payroll has been approved.', 'success');
+                        setTimeout(() => location.reload(), 1200);
+                    },
+                    error: function(err) {
+                        Swal.fire('Error', 'Failed to approve payroll.', 'error');
+                        console.error(err.responseText);
+                    }
+                });
             } else {
                 Swal.fire('Cancelled', 'The payroll was not approved.', 'error');
             }
         });
     }
-</script>
+    </script> --}}
+<script>
+        function confirmApprove(id) {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: 'You want to approve this payroll?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, approve it!',
+                cancelButtonText: 'Cancel',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('approve-form-' + id).submit();
+                    Swal.fire('Approved!', 'The payroll has been approved.', 'success');
+                } else {
+                    Swal.fire('Cancelled', 'The payroll was not approved.', 'error');
+                }
+            });
+        }
+    </script>
 
 {{-- ... --}}
 <script>

@@ -273,21 +273,21 @@
                                 <div class="form-group">
                                     <label for="positional_allowance">Positional Allowance</label>
                                     <input type="text" name="positional_allowance" id="positional_allowance"
-                                        class="form-control" value="{{ old('positional_allowance') }}"
+                                        class="form-control" value="{{old('positional_allowance')}}"
                                         oninput="formatCurrency(this)">
                                 </div>
 
                                 <div class="form-group">
                                     <label for="transport_allowance">Transport Allowance</label>
                                     <input type="text" name="transport_allowance" id="transport_allowance"
-                                        class="form-control" value="{{ old('transport_allowance') }}"
+                                        class="form-control" value="{{old('transport_allowance')}}"
                                         oninput="formatCurrency(this)">
                                 </div>
 
                                 <div class="form-group">
                                     <label for="bonus_allowance">Bonus</label>
                                     <input type="text" name="bonus_allowance" id="bonus_allowance"
-                                        class="form-control" value="{{ old('bonus_allowance') }}"
+                                        class="form-control" value="{{old('bonus_allowance')}}"
                                         oninput="formatCurrency(this)">
                                 </div>
 
@@ -379,16 +379,37 @@
 </div>
 
 <script>
-    // Format angka saat diketik (ex: 50000 => 50.000)
     function formatCurrency(input) {
-        let value = input.value.replace(/\D/g, '');
-        if (value) {
-            input.value = new Intl.NumberFormat('id-ID').format(value);
-        } else {
-            input.value = '';
-        }
+        let value = input.value.replace(/[^\d]/g, '');
+        value = value.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        input.value = value;
     }
 
+    // Hapus titik sebelum kirim ke server
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                const moneyFields = [
+                    'current_salary',
+                    'attendance_allowance',
+                    'positional_allowance',
+                    'transport_allowance',
+                    'bonus_allowance'
+                ];
+
+                moneyFields.forEach(id => {
+                    const input = document.getElementById(id);
+                    if (input) {
+                        input.value = input.value.replace(/\./g, '');
+                    }
+                });
+            });
+        }
+    });
+</script>
+
+<script>
     // Function to automatically update phone number prefix
     function phonenumber(input) {
         // Get the value from the input

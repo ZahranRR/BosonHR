@@ -12,7 +12,7 @@
                         <form method="GET" action="{{ route('slippay.index') }}"
                             class="form-inline d-flex mb-0 align-items-center">
                             <input type="month" name="month" class="form-control"
-                                value="{{ request()->query('month', $selectedMonth ?? now()->format('Y-m')) }}">
+                                value="{{ request('month', now()->format('Y-m')) }}">
                             <button type="submit" class="btn btn-secondary ml-2">Search</button>
                         </form>
 

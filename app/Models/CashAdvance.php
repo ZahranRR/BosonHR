@@ -16,6 +16,7 @@ class CashAdvance extends Model
         'total_amount',
         'installments',
         'installment_amount',
+        'last_processed_month',
         'remaining_installments',
         'start_month',
         'status'

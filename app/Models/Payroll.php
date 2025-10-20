@@ -70,4 +70,10 @@ class Payroll extends Model
     {
         return $this->hasMany(Offrequest::class, 'employee_id', 'employee_id');
     }
+
+    public function getWasRecentlyApprovedAttribute()
+    {
+        return strtolower($this->status) === 'approved';
+    }
+
 }

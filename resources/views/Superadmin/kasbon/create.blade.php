@@ -111,8 +111,8 @@
             Swal.fire({
                 position: 'top-center',
                 icon: 'success',
-                title: 'Kasbon berhasil disimpan',
-                showConfirmButton: false,
+                title: 'Cash Advance Succesfully Saved',
+                showConfirmButton: false,   
                 timer: 1200
             }).then(() => {
                 document.getElementById('kasbonForm').submit();

@@ -33,6 +33,9 @@ class AttandanceController extends Controller
     public function scanView()
     {
         $employee = Employee::where('user_id', Auth::id())->first();
+        if (!$employee) {
+            return redirect()->back()->with('error', 'Employee record not found for this user.');
+        }
         $today = now()->format('Y-m-d');
 
         // Periksa apakah karyawan sedang cuti untuk hari ini
@@ -92,7 +95,7 @@ class AttandanceController extends Controller
 
         // Waktu sekarang dan waktu check-in yang dijadwalkan
         $currentTime = now();
-        $checkInTime = $employee->check_in_time; // Waktu check-in yang dijadwalkan
+        $checkInTime = $employee->division->check_in_time; // Waktu check-in yang dijadwalkan
         $toleranceMinutes = 1; // Toleransi waktu dalam menit
 
         $scheduledCheckInTime = Carbon::createFromFormat('H:i:s', $checkInTime, $currentTime->timezone)->setDate($currentTime->year, $currentTime->month, $currentTime->day);
@@ -152,7 +155,7 @@ class AttandanceController extends Controller
 
         // Cek apakah sudah mencapai waktu check-out yang dijadwalkan
         $currentTime = now();
-        $checkOutTime = $employee->check_out_time; // Waktu check-out yang dijadwalkan
+        $checkOutTime = $employee->division->check_out_time; // Waktu check-out yang dijadwalkan
         $toleranceMinutes = 1; // Toleransi waktu dalam menit
 
         $scheduledCheckOutTime = Carbon::createFromFormat('H:i:s', $checkOutTime, $currentTime->timezone)->setDate($currentTime->year, $currentTime->month, $currentTime->day);

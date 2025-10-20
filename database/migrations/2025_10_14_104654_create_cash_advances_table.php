@@ -21,7 +21,6 @@ return new class extends Migration
             $table->string('start_month',7);
             $table->enum('status', ['ongoing', 'completed'])->default('ongoing');
             $table->timestamps();
-        
             $table->foreign('employee_id')->references('employee_id')->on('employees')->onDelete('cascade');
         });
         

@@ -52,11 +52,11 @@
                         </tr>
                         <tr>
                             <th>Check IN Time</th>
-                            <td>{{ $employee->check_in_time }}</td>
+                            <td>{{ $employee->division->check_in_time }}</td>
                         </tr>
                         <tr>
                             <th>Check OUT Time</th>
-                            <td>{{ $employee->check_out_time }}</td>
+                            <td>{{ $employee->division->check_out_time }}</td>
                         </tr>
                         <tr>
                             <th>Division</th>

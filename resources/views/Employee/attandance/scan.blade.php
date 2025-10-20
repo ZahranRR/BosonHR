@@ -80,6 +80,19 @@
 <body>
     <section class="content">
         <div class="container mt-5">
+
+            @if (session('error'))
+                <div class="alert alert-danger text-center">
+                    {{ session('error') }}
+                </div>
+            @endif
+
+            @if (session('success'))
+                <div class="alert alert-success text-center">
+                    {{ session('success') }}
+                </div>
+            @endif
+            
             <div class="card">
                 <div class="card-header bg-black text-white text-center">
                     <h3 class="card-title"><i class="fas fa-camera"></i> Attendance Scan</h3>

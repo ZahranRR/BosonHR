@@ -47,7 +47,15 @@ class OvertimeController extends Controller
 
 
     public function create()
-    {
+    {   
+        $employee = auth()->user()->employee;
+
+        // Cegah jika employee tidak diizinkan lembur
+        if ($employee->division->has_overtime == 0) {
+            return redirect()->route('overtime.index')
+                ->with('error', 'You are not allowed to request overtime.');
+        }
+
         // Ambil daftar manager (user dengan role 'manager')
         $managers = User::role('manager')->get();
 
@@ -56,7 +64,14 @@ class OvertimeController extends Controller
     }
 
     public function store(Request $request)
-    {
+    {   
+        $employee = auth()->user()->employee;
+
+        if ($employee->division->has_overtime == 0) {
+            return redirect()->route('overtime.index')
+                ->with('error', 'You are not allowed to request overtime.');
+        }
+
         // Validasi data overtime
         $request->validate([
             'overtime_date' => [
