@@ -49,5 +49,9 @@ class AppServiceProvider extends ServiceProvider
                 $view->with('pendingOvertimeCount', $pendingOvertimeCount);
             }
         });
+
+        if (config('app.env') === 'production') {
+            URL::forceScheme('https');
+        }
     }
 }

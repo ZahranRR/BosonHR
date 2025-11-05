@@ -416,7 +416,7 @@ class PayrollController extends Controller
                 }
             }
 
-            Log::info("Payroll Permanent Summary | {$employee->first_name} {$employee->last_name} | Month: {$month} | Workdays: {$monthlyWorkdays} | Worked: {$totalDaysWorked} | Absent: {$totalAbsent} | Base: {$baseSalary} | OT Hours: {$totalOvertimeHours} | OT Pay: {$overtimePay} | Cash Advance: ($cashAdvance) | Total: {$totalSalary}");
+            Log::info("Payroll Permanent Summary | {$employee->first_name} {$employee->last_name} | Month: {$month} | Workdays: {$monthlyWorkdays} | Worked: {$totalDaysWorked} | Absent: {$totalAbsent} | Base: {$baseSalary} | OT Hours: {$totalOvertimeHours} | OT Pay: {$overtimePay} | Total Deductions : {$totalDeductions} | Cash Advance: ($cashAdvance) | Total: {$totalSalary}");
 
             return $this->storePayroll(
                 $employee,
