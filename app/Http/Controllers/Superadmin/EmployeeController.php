@@ -64,114 +64,6 @@ class EmployeeController extends Controller
         return view('Superadmin.Employeedata.Employee.create', compact('divisions'));
     }
 
-    // public function store(Request $request)
-    // {
-    //     // Validasi input
-    //     $validatedData = $request->validate(
-    //         [
-    //             'first_name' => 'required|string',
-    //             'last_name' => 'required|string',
-    //             'email' => 'required|email|unique:employees,email',
-    //             'check_in_time' => 'required|date_format:H:i',
-    //             'check_out_time' => 'required|date_format:H:i|after:check_in_time',
-    //             'division_id' => 'required|exists:divisions,id',
-    //             'place_birth' => 'required|string',
-    //             'date_birth' => 'nullable|date',
-    //             'identity_number' => 'nullable|regex:/^[0-9]+$/|max:20',
-    //             'address' => 'nullable|string',
-    //             'current_address' => 'nullable|string',
-    //             'blood_type' => 'nullable|in:A,B,AB,O',
-    //             'blood_rhesus' => 'nullable|string',
-    //             'phone_number' => 'required|numeric',
-    //             'hp_number' => 'required|numeric',
-    //             'marital_status' => 'nullable|in:Single,Married,Widow,Widower',
-    //             'cv_file' => 'required|file|mimes:pdf,doc,docx|max:2048',
-    //             // 'update_cv' => 'nullable|string',
-    //             'last_education' => 'nullable|in:Elementary School,Junior High School,Senior High School,Vocational High School,Associate Degree 1,Associate Degree 2,Associate Degree 3,Bachelor’s Degree,Master’s Degree,Doctoral Degree',
-    //             'degree' => 'nullable|string',
-    //             'starting_date' => 'nullable|date',
-    //             'interview_by' => 'nullable|string',
-    //             'current_salary' => 'nullable|string',
-    //             'insurance' => 'nullable|boolean',
-    //             'serious_illness' => 'nullable|string',
-    //             'hereditary_disease' => 'nullable|string',
-    //             'emergency_contact' => 'nullable|string',
-    //             'relations' => 'nullable|in:Parent,Guardian,Husband,Wife,Sibling',
-    //             'emergency_number' => 'required|numeric',
-    //             'status' => 'nullable|in:Active,Inactive,Pending,Suspend',
-    //         ],
-    //         [
-    //             'identity_number.regex' => 'Identity number must only contain numbers.',
-    //             'identity_number.max' => 'Identity number cannot exceed 20 digits.',
-    //             'phone_number.numeric' => 'Phone number must contain only numbers.',
-    //             'phone_number.max' => 'Phone number cannot exceed 15 digits.',
-    //             'hp_number.numeric' => 'HP number must only contain numbers.',
-    //             'hp_number.max' => 'HP number cannot exceed 15 digits.',
-    //             'emergency_number.numeric' => 'Emergency number must only contain numbers.',
-    //             'emergency_number.max' => 'Emergency number cannot exceed 15 digits.',
-    //         ],
-    //     );
-
-    //     // Hapus pemisah ribuan pada `current_salary` dan konversi ke integer
-    //     if (isset($request->current_salary)) {
-    //         $validatedData['current_salary'] = (int) str_replace('.', '', $request->current_salary);
-    //     }
-
-    //     // Proses unggah file CV
-    //     if ($request->hasFile('cv_file')) {
-    //         $file = $request->file('cv_file');
-    //         $fileName = time() . '_' . $file->getClientOriginalName();
-    //         $filePath = $file->storeAs('cv_files', $fileName, 'public');
-    //         $validatedData['cv_file'] = $filePath;
-    //     }
-
-    //     // Generate NIK
-    //     $division = Division::find($request->division_id);
-
-    //     $lastEmployee = Employee::where('division_id', $division->id)
-    //         ->orderBy('employee_number', 'desc')
-    //         ->first();
-
-    //     $nextNumber = $lastEmployee ? intval(substr($lastEmployee->employee_number, -3)) + 1 : 1;
-
-    //     $formattedNumber = str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
-    //     $yearBirth = date('y', strtotime($request->date_birth));
-    //     $yearStart = date('y', strtotime($request->starting_date));
-    //     $validatedData['employee_number'] = sprintf('%03d/%02d%02d/%s', $division->id, $yearBirth, $yearStart, $formattedNumber);
-
-    //     try {
-    //         // Menyimpan data Employee
-    //         $employee = Employee::create($validatedData);
-
-    //         // Membuat data User
-    //         $user = User::create([
-    //             'name' => $request->first_name . ' ' . $request->last_name,
-    //             'email' => $request->email,
-    //             'password' => bcrypt('defaultpassword'), // Default password
-    //             'employee_id' => $employee->employee_id,
-    //         ]);
-
-    //         // Menyimpan ID User ke Employee
-    //         $employee->user_id = $user->user_id;
-    //         $employee->save();
-
-    //         //Notif error create user
-    //         if (!$user) {
-    //             return redirect()->route('employee.index')->withErrors('Failed to create user account!');
-    //         }
-
-    //         // Kirim email kepada user yang baru dibuat
-    //         // Mail::to($user->email)->send(new WelcomeUserMail($user, 'defaultpassword'));
-
-    //         return redirect()
-    //             ->route('datauser.edit', $user->user_id)
-    //             ->with('success', 'Employee created successfully.');
-    //     } catch (\Exception $e) {
-    //         return back()->withErrors($e->getMessage());
-    //     }
-    // }
-
-
     public function store(Request $request)
     {
         Log::info('EmployeeController@store called', [
@@ -222,28 +114,23 @@ class EmployeeController extends Controller
 
             // Salary
             if (isset($request->current_salary)) {
-                $validatedData['current_salary'] = (int) str_replace('.', '', $request->current_salary);
-                Log::info('current_salary cleaned', ['current_salary' => $validatedData['current_salary']]);
+                $validatedData['current_salary'] = (int) str_replace('.', '', $request->current_salary ?? 0);
             }
 
             if (isset($request->attendance_allowance)) {
-                $validatedData['attendance_allowance'] = (int) str_replace('.', '', $request->attendance_allowance);
-                Log::info('attendance_allowance cleaned', ['attendance_allowance' => $validatedData['attendance_allowance']]);
+                $validatedData['attendance_allowance'] = (int) str_replace('.', '', $request->attendance_allowance ?? 0);
             }
 
             if (isset($request->positional_allowance)) {
-                $validatedData['positional_allowance'] = (int) str_replace('.', '', $request->positional_allowance);
-                Log::info('positional_allowance cleaned', ['positional_allowance' => $validatedData['positional_allowance']]);
+                $validatedData['positional_allowance'] = (int) str_replace('.', '', $request->positional_allowance ?? 0);
             }
 
             if (isset($request->transport_allowance)) {
-                $validatedData['transport_allowance'] = (int) str_replace('.', '', $request->transport_allowance);
-                Log::info('transport_allowance cleaned', ['transport_allowance' => $validatedData['transport_allowance']]);
+                $validatedData['transport_allowance'] = (int) str_replace('.', '', $request->transport_allowance ?? 0);
             }
 
             if (isset($request->bonus_allowance)) {
-                $validatedData['bonus_allowance'] = (int) str_replace('.', '', $request->bonus_allowance);
-                Log::info('bonus_allowance cleaned', ['bonus_allowance' => $validatedData['bonus_allowance']]);
+                $validatedData['bonus_allowance'] = (int) str_replace('.', '', $request->bonus_allowance ?? 0);
             }
 
             // FILE
@@ -417,27 +304,16 @@ class EmployeeController extends Controller
         );
 
         // Menghapus pemisah ribuan dan mengonversi ke integer
-        if (isset($request->current_salary)) {
-            $validatedData['current_salary'] = (int) str_replace('.', '', $request->input('current_salary'));
-        }
-
-        if (isset($request->attendance_allowance)) {
-            $validatedData['attendance_allowance'] = (int) str_replace('.', '', $request->input('attendance_allowance'));
-        }
-
-        if (isset($request->positional_allowance)) {
-            $validatedData['positional_allowance'] = (int) str_replace('.', '', $request->input('positional_allowance'));
+        foreach ([
+            'current_salary',
+            'attendance_allowance',
+            'positional_allowance',
+            'transport_allowance',
+            'bonus_allowance'
+        ] as $field) {
+            $validatedData[$field] = (int) str_replace('.', '', $request->$field ?? 0);
         }
         
-        if (isset($request->transport_allowance)) {
-            $validatedData['transport_allowance'] = (int) str_replace('.', '', $request->input('transport_allowance'));
-        }
-        
-        if (isset($request->bonus_allowance)) {
-            $validatedData['bonus_allowance'] = (int) str_replace('.', '', $request->input('bonus_allowance'));
-        }
-        
-
         // Proses penggantian file CV hanya jika ada file CV yang diunggah
         if ($request->hasFile('cv_file')) {
             // Hapus file CV lama jika ada

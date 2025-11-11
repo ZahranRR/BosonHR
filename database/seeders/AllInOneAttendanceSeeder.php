@@ -17,7 +17,7 @@ class AllInOneAttendanceSeeder extends Seeder
     {
         date_default_timezone_set('Asia/Jakarta');
 
-        $month = '2025-10';
+        $month = '2025-11';
         [$year, $monthNumber] = explode('-', $month);
 
         $startDate = Carbon::createFromDate($year, $monthNumber, 1, 'Asia/Jakarta')->startOfMonth();

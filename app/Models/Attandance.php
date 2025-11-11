@@ -11,7 +11,17 @@ class Attandance extends Model
 
     protected $primaryKey = 'attandance_id';
 
-    protected $fillable = ['employee_id', 'check_in', 'check_out', 'check_in_status', 'check_out_status', 'image'];
+    protected $fillable = [
+        'employee_id',
+        'check_in',
+        'check_out', 
+        'check_in_status', 
+        'check_out_status', 
+        'image', 
+        'latitude', 
+        'longitude', 
+        'address'
+    ];
     protected $casts = [
         'check_in' => 'datetime',
         'check_out' => 'datetime',

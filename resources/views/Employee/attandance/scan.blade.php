@@ -92,7 +92,7 @@
                     {{ session('success') }}
                 </div>
             @endif
-            
+
             <div class="card">
                 <div class="card-header bg-black text-white text-center">
                     <h3 class="card-title"><i class="fas fa-camera"></i> Attendance Scan</h3>
@@ -120,8 +120,7 @@
                             <button id="btn-checkin" onclick="takeSnapshot('checkin')" class="btn btn-dark btn-checkin">
                                 Capture Image
                             </button>
-                            <button id="btn-checkout" onclick="takeSnapshot('checkout')"
-                                class="btn btn-dark btn-checkout">
+                            <button id="btn-checkout" onclick="takeSnapshot('checkout')" class="btn btn-dark btn-checkout">
                                 Capture Image
                             </button>
                         </div>
@@ -155,15 +154,15 @@
             }
         }
 
-        window.onload = function() {
+        window.onload = function () {
             updateButtonVisibility();
 
             // Akses kamera menggunakan MediaDevices API
             navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: "user"
-                    }
-                })
+                video: {
+                    facingMode: "user"
+                }
+            })
                 .then(stream => {
                     video.srcObject = stream;
                     video.play();
@@ -176,33 +175,125 @@
         };
 
         function takeSnapshot(action) {
-            const url = action === 'checkin' ? '{{ route('attandance.checkIn') }}' : '{{ route('attandance.checkOut') }}';
+            const apiurl = action === 'checkin' ? '{{ route('attandance.checkIn') }}' : '{{ route('attandance.checkOut') }}';
 
-            // Set ukuran canvas sesuai video
+            // // Set ukuran canvas sesuai video
+            // canvas.width = video.videoWidth;
+            // canvas.height = video.videoHeight;
+
+            // // Gambar frame dari video ke canvas
+            // context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // // Konversi ke base64
+            // const imageData = canvas.toDataURL('image/jpeg');
+
+            // // Kirim ke server
+            // sendImageToServer(imageData, url, action);
+
+            // Ambil lokasi GPS sebelum ambil gambar
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const latitude = position.coords.latitude;
+                        const longitude = position.coords.longitude;
+
+                        // Ambil alamat via reverse geocoding (misal pakai Nominatim)
+                        fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`)
+                            .then(res => res.json())
+                            .then(data => {
+                                const address = data.display_name || 'Unknown location';
+                                captureAndSend(apiurl, action, latitude, longitude, address);
+                            })
+                            .catch(() => {
+                                captureAndSend(apiurl, action, latitude, longitude, 'Location unavailable');
+                            });
+                    },
+                    (error) => {
+                        console.error('Error getting location:', error);
+                        captureAndSend(apiurl, action, null, null, 'Location not allowed');
+                    }
+                );
+            } else {
+                alert('Geolocation not supported.');
+            }
+        }
+
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let line = '';
+
+            for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = context.measureText(testLine);
+                const testWidth = metrics.width;
+
+                if (testWidth > maxWidth && n > 0) {
+                    context.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            context.fillText(line, x, y);
+        }
+
+        function captureAndSend(apiurl, action, latitude, longitude, address) {
+            // Ambil frame dari video
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-
-            // Gambar frame dari video ke canvas
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const timestamp = new Date().toLocaleString();
+
+            // Tentukan area teks dan pembungkus
+            const maxWidth = canvas.width - 40;
+            const lineHeight = 22;
+            const textX = 20;
+
+            // Hitung tinggi background dinamis
+            const words = address.split(' ');
+            const charsPerLine = Math.floor(maxWidth / 10);
+            const lineCount = Math.ceil(words.join(' ').length / charsPerLine);
+            const boxHeight = 50 + (lineCount * 22);
+
+            // Gambar background semi-transparan
+            context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            context.fillRect(0, canvas.height - boxHeight, canvas.width, boxHeight);
+
+            // Teks putih dengan shadow agar kontras
+            context.fillStyle = 'white';
+            context.font = '20px Arial';
+            context.shadowColor = 'rgba(0, 0, 0, 0.7)';
+            context.shadowBlur = 4;
+
+            // Gambar alamat dan waktu
+            let textY = canvas.height - boxHeight + 30;
+            wrapText(context, `📍 ${address}`, textX, textY, maxWidth, lineHeight);
+            textY += (lineCount * lineHeight) + 5;
+            context.fillText(`🕒 ${timestamp}`, textX, textY);
 
             // Konversi ke base64
             const imageData = canvas.toDataURL('image/jpeg');
 
             // Kirim ke server
-            sendImageToServer(imageData, url, action);
+            sendImageToServer(imageData, apiurl, action, latitude, longitude, address);
         }
 
-        function sendImageToServer(imageData, url, action) {
-            fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({
-                        image: imageData
-                    })
+        function sendImageToServer(imageData, apiurl, action, latitude, longitude, address) {
+            fetch(apiurl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    image: imageData,
+                    latitude: latitude,
+                    longitude: longitude,
+                    address: address
                 })
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -217,7 +308,7 @@
                                 cancelButtonText: 'Cancel',
                             }).then((result) => {
                                 if (result.isConfirmed) {
-                                    finalizeCheckOut(imageData, url);
+                                    finalizeCheckOut(imageData, apiurl);
                                 } else {
                                     Swal.fire('Cancelled', 'Your check-out was cancelled.', 'error');
                                 }
@@ -241,19 +332,19 @@
                 });
         }
 
-        function finalizeCheckOut(imageData, url) {
+        function finalizeCheckOut(imageData, apiurl) {
             // Lanjutkan proses check-out setelah konfirmasi
-            fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({
-                        image: imageData,
-                        confirmedEarly: true, // Menandakan user sudah konfirmasi
-                    })
+            fetch(apiurl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    image: imageData,
+                    confirmedEarly: true, // Menandakan user sudah konfirmasi
                 })
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {

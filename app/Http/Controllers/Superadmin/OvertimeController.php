@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Superadmin;
 
 use App\Http\Controllers\Controller;
+use App\Mail\OvertimeStatusMail;
 use App\Models\Employee;
 use App\Models\Overtime;
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\OvertimeRequestNotification;
 use Google\Service\AnalyticsData\OrderBy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class OvertimeController extends Controller
 {
@@ -49,6 +52,12 @@ class OvertimeController extends Controller
     public function create()
     {   
         $employee = auth()->user()->employee;
+
+        //Cek apakah employee mempunyai division
+        if (!$employee || !$employee->division) {
+            return redirect()->route('overtime.index')
+                ->with('error', 'You have to set your division first.');
+        }
 
         // Cegah jika employee tidak diizinkan lembur
         if ($employee->division->has_overtime == 0) {
@@ -106,7 +115,7 @@ class OvertimeController extends Controller
 
 
             // Membuat data overtime
-            Overtime::create([
+            $overtime = Overtime::create([
                 'employee_id' => auth()->user()->employee->employee_id,  // Mendapatkan employee_id dari user yang sedang login
                 'overtime_date' => $request->overtime_date,
                 'duration' => $request->duration,
@@ -115,6 +124,12 @@ class OvertimeController extends Controller
                 'manager_id' => $request->manager_id,  // Mendapatkan manager_id dari form'
                 'status' => 'pending',  // Status default untuk overtime yang diajukan
             ]);
+
+            // Kirim notifikasi ke manager
+            $managers = User::role('manager')->get();
+            foreach ($managers as $manager) {
+                $manager->notify(new OvertimeRequestNotification($overtime));
+            }
 
             Log::info('Overtime created successfully', [
                 'employee_id' => $request->employee_id,
@@ -161,6 +176,8 @@ class OvertimeController extends Controller
 
         $overtime->update(['status' => 'approved']);
 
+        Mail::to($overtime->employee->user->email)->send(new OvertimeStatusMail($overtime, 'approved'));
+
         return redirect()->route('overtime.approvals')
             ->with('success', 'Overtime request successfully approved!');
     }
@@ -172,6 +189,8 @@ class OvertimeController extends Controller
             ->firstOrFail();
 
         $overtime->update(['status' => 'rejected']);
+
+        Mail::to($overtime->employee->user->email)->send(new OvertimeStatusMail($overtime, 'rejected'));
 
         return redirect()->route('overtime.approvals')
             ->with('success', 'Overtime request successfully rejected!');

@@ -115,6 +115,9 @@ class AttandanceController extends Controller
         $attendance->check_in = $currentTime;
         $attendance->check_in_status = $isLate ? 'LATE' : 'IN';
         $attendance->image_checkin = $imagePath;
+        $attendance->latitude = $request->latitude;
+        $attendance->longitude = $request->longitude;
+        $attendance->address = $request->address;
         $attendance->save();
 
         $message = $isLate ? 'Check-in successful, but you are late.' : 'Check-in successful, on time.';
@@ -189,6 +192,9 @@ class AttandanceController extends Controller
         $attendance->check_out = $currentTime;
         $attendance->check_out_status = $statusCheckOut;
         $attendance->image_checkout = $imagePath;
+        $attendance->latitude = $request->latitude;
+        $attendance->longitude = $request->longitude;
+        $attendance->address = $request->address;
         $attendance->save();
 
         $message = $statusCheckOut === 'EARLY' ? 'Check-out successful, but you left early.' : 'Check-out successful, on time.';

@@ -58,23 +58,23 @@ class PayrollController extends Controller
             $existingPayroll = Payroll::where('employee_id', $employee->employee_id)
                 ->where('month', $month)
                 ->first();
-                if ($existingPayroll) {
-                    Log::info("⚙️ Updating existing payroll for {$employee->first_name} ({$employee->employee_id}) | Month: {$month}");
-                
-                    // Ambil kasbon aktif
-                    $activeCashAdvance = CashAdvance::where('employee_id', $employee->employee_id)
-                        ->where('status', 'completed')
-                        ->whereRaw("LEFT(start_month, 7) = ?", [$month])
-                        ->first();
-                
-                    $cashAdvance = $activeCashAdvance ? $activeCashAdvance->installment_amount : 0;
-                
-                    // Tetap lanjut ke perhitungan ulang payroll
-                    // tapi jangan ubah status existing payroll (tetap Pending)
-                } else {
-                    // Belum ada payroll → tetap 0
-                    $cashAdvance = 0;
-                }                
+            if ($existingPayroll) {
+                Log::info("⚙️ Updating existing payroll for {$employee->first_name} ({$employee->employee_id}) | Month: {$month}");
+
+                // Ambil kasbon aktif
+                $activeCashAdvance = CashAdvance::where('employee_id', $employee->employee_id)
+                    ->where('status', 'completed')
+                    ->whereRaw("LEFT(start_month, 7) = ?", [$month])
+                    ->first();
+
+                $cashAdvance = $activeCashAdvance ? $activeCashAdvance->installment_amount : 0;
+
+                // Tetap lanjut ke perhitungan ulang payroll
+                // tapi jangan ubah status existing payroll (tetap Pending)
+            } else {
+                // Belum ada payroll → tetap 0
+                $cashAdvance = 0;
+            }
 
             // // Ambil kasbon aktif 
             // $activeCashAdvance = CashAdvance::where('employee_id', $employee->employee_id)
@@ -229,11 +229,10 @@ class PayrollController extends Controller
             // Cek apakah pegawai punya kasbon aktif
             $activeCashAdvance = CashAdvance::where('employee_id', $employee->employee_id)
                 ->where('status', 'completed')
-                ->whereRaw("LEFT(start_month, 7) = ?", [$month])                
+                ->whereRaw("LEFT(start_month, 7) = ?", [$month])
                 ->first();
 
             $cashAdvance = $activeCashAdvance ? $activeCashAdvance->installment_amount : 0;
-
 
             return $this->storePayroll(
                 $employee,
@@ -298,9 +297,11 @@ class PayrollController extends Controller
             $out = Carbon::createFromFormat('H:i:s', $divisionOut);
 
             $workDurationInHours = max(1, $out->diffInHours($in)); // ⛔ tidak boleh 0
-            $hourlyRate = $employee->division->hourly_rate ?? ($dailySalary / $workDurationInHours);
 
-            // --- Ambil overtime dari table Overtime ---
+            // --- Overtime ---
+            $baseSalary = $employee->current_salary ?? 0;
+            $hourlyRate = $baseSalary > 0 ? ($baseSalary / 173) : 0;
+
             $overtimeData = Overtime::where('employee_id', $employee->employee_id)
                 ->where('status', 'approved')
                 ->whereMonth('overtime_date', Carbon::parse($month)->month)
@@ -308,6 +309,7 @@ class PayrollController extends Controller
                 ->get();
 
             $totalOvertimeHours = 0;
+            $overtimeSummary = [];
 
             foreach ($overtimeData as $ot) {
                 $attendance = $employee->attendanceLogs()
@@ -325,7 +327,6 @@ class PayrollController extends Controller
                 $overtimeStart = Carbon::parse($attendance->check_out)
                     ->setTimeFromTimeString($divisionOutTime->format('H:i:s'))
                     ->addMinutes(30);
-                // $overtimeStart = $divisionOutTime->copy()->addMinutes(30); // cutoff 18:30
 
                 Log::debug("[OT] {$employee->first_name} {$employee->last_name} | {$ot->overtime_date} | Checkout: {$checkOut->format('Y-m-d H:i')} | Cutoff: {$overtimeStart->format('H:i')}");
 
@@ -337,25 +338,35 @@ class PayrollController extends Controller
                 $overtimeMinutes = $overtimeStart->diffInMinutes($checkOut);
                 $actualHours = max(1, ceil($overtimeMinutes / 60));
 
-                // request overtime dari tabel (1 atau 2 jam)
+                // Durasi overtime
                 $requestedHours = $ot->duration;
 
                 // maksimal 2 jam / hari
                 $hours = min($actualHours, $requestedHours, 2);
+
+                // simpan ke rekap per durasi
+                if (!isset($overtimeSummary[$hours])) {
+                    $overtimeSummary[$hours] = 0;
+                }
+                $overtimeSummary[$hours]++;
 
                 $totalOvertimeHours += $hours;
 
                 Log::debug("[OT] {$employee->first_name} {$employee->last_name} | {$ot->overtime_date} | Checkout {$checkOut->format('H:i')} | Overtime {$hours} jam");
             }
 
-            // ⛔ Pastikan overtime minimal 0
-            $overtimePay = max(0, $totalOvertimeHours * $hourlyRate);
+            $totalOvertimePay = 0;
+            foreach ($overtimeSummary as $hours => $count) {
+                $pay = $hourlyRate * $hours * $count;
+                $totalOvertimePay += $pay;
+                Log::info("[OT-CALC] {$employee->first_name} {$employee->last_name} | {$month} | {$hours} jam × {$count} kali = {$pay}");
+            }
+
+            $overtimePay = round($totalOvertimePay, 2);
 
             Log::info("[OT-SUMMARY] {$employee->first_name} {$employee->last_name} | Bulan: {$month} | Total OT Hours: {$totalOvertimeHours} | Overtime Pay: {$overtimePay}");
 
-
             // --- Hitung gaji dasar & potongan ---
-            $baseSalary = $employee->current_salary ?? 0;
             $positionalAllowance = $employee->positional_allowance ?? 0;
             $transportAllowance = $employee->transport_allowance ?? 0;
             $bonusAllowance = $employee->bonus_allowance ?? 0;
@@ -464,17 +475,17 @@ class PayrollController extends Controller
         $currentSalary = $employee->employee_type === 'Freelance'
             ? 0
             : ($employee->current_salary ?? 0);
-    
+
         // Ambil payroll lama
         $existing = Payroll::where('employee_id', $employee->employee_id)
             ->where('month', $month)
             ->first();
-    
+
         // Pertahankan status lama kalau sudah Approved
         $status = $existing && strtolower($existing->status) === 'approved'
             ? 'Approved'
             : 'Pending';
-    
+
         // Update atau buat payroll baru tanpa menimpa status approved
         $data = [
             'employee_name'        => $employee->first_name . ' ' . $employee->last_name,
@@ -484,7 +495,7 @@ class PayrollController extends Controller
             'total_absent'         => $totalAbsent,
             'total_days_off'       => 0,
             'total_late_check_in'  => $totalLateCheckIn,
-            'total_early_check_out'=> $totalEarlyCheckOut,
+            'total_early_check_out' => $totalEarlyCheckOut,
             'effective_work_days'  => $effectiveWorkDays,
             'overtime_pay'         => $overtimePay,
             'cash_advance'         => $cashAdvance,
@@ -496,18 +507,18 @@ class PayrollController extends Controller
             'total_salary'         => $totalSalary,
             'status'               => $status,
         ];
-    
+
         $payroll = Payroll::updateOrCreate(
             [
-                'employee_id' => $employee->employee_id, 
+                'employee_id' => $employee->employee_id,
                 'month' => Carbon::parse($month)->format('Y-m')
             ],
             $data
         );
-    
+
         // Logging tambahan agar bisa kamu lihat di laravel.log
         Log::info("Payroll stored | {$employee->first_name} {$employee->last_name} | Month: {$month} | Status: {$status}");
-    
+
         return [
             'payroll_id'          => $payroll->payroll_id,
             'id'                  => $employee->employee_id,
@@ -518,20 +529,20 @@ class PayrollController extends Controller
             'total_absent'        => $totalAbsent,
             'total_days_off'      => 0,
             'total_late_check_in' => $totalLateCheckIn,
-            'total_early_check_out'=> $totalEarlyCheckOut,
+            'total_early_check_out' => $totalEarlyCheckOut,
             'effective_work_days' => $effectiveWorkDays,
             'overtime_pay'        => $overtimePay,
             'cash_advance'        => $cashAdvance,
-            'positional_allowance'=> $positionalAllowance,
+            'positional_allowance' => $positionalAllowance,
             'transport_allowance' => $transportAllowance,
             'bonus_allowance'     => $bonusAllowance,
-            'attendance_allowance'=> $attendanceAllowance,
+            'attendance_allowance' => $attendanceAllowance,
             'absent_deduction'    => $absentDeduction,
             'total_salary'        => $totalSalary,
             'status'              => $status,
         ];
     }
-    
+
 
     private function calculateCustomAbsents($employee, $plannedWorkDays, $workedDays)
     {
@@ -570,7 +581,11 @@ class PayrollController extends Controller
             // libur 2x sebulan di hari Minggu
             $sundayAbsents = collect($absentDates)->filter(fn($d) => $d->isSunday())->take(2);
             $tolerance = $sundayAbsents->count();
-        } elseif ($divisionName === 'helper') {
+        }elseif ($divisionName === 'kenek') {
+            // libur 1x sebulan di hari Minggu
+            $sundayAbsents = collect($absentDates)->filter(fn($d) => $d->isSunday())->take(1);
+            $tolerance = $sundayAbsents->count();
+        }elseif ($divisionName === 'helper') {
             // libur 1x sebulan di hari Minggu
             $sundayAbsents = collect($absentDates)->filter(fn($d) => $d->isSunday())->take(1);
             $tolerance = $sundayAbsents->count();
@@ -580,6 +595,9 @@ class PayrollController extends Controller
                 ->filter(fn($d) => $d->isWeekday()) // weekday = Mon–Fri
                 ->take(2);
             $tolerance = $weekdayAbsents->count();
+        }elseif ($divisionName === 'teknisi ac') {
+            // libur 2x sebulan di hari apa pun (2 hari bebas)
+            $tolerance = min(2, count($absentDates));
         }
 
         // Total absen final = absen kasar - toleransi
