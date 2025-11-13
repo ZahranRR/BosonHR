@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Division;
 use App\Models\Employee;
 use App\Models\User;
+use Dotenv\Exception\ValidationException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -211,7 +212,19 @@ class EmployeeController extends Controller
             }
 
             Log::info('store() completed successfully');
-            return redirect()->route('datauser.edit', ['user_id' => $user->user_id])->with('success', 'Employee created successfully.');
+            return redirect()
+                ->route('datauser.edit', ['user_id' => $user->user_id])
+                ->with('success', 'Employee created successfully.');
+
+        } catch (ValidationException $e) {
+            Log::warning('Validation failed', [
+                'errors' => $e->errors()
+            ]);
+            return redirect()
+                ->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        
         } catch (\Throwable $th) {
             Log::error('Store failed', [
                 'message' => $th->getMessage(),
@@ -219,10 +232,11 @@ class EmployeeController extends Controller
                 'line' => $th->getLine(),
                 'trace' => $th->getTraceAsString()
             ]);
-            return back()->withErrors('Failed to create employee: ' . $th->getMessage());
+            return back()
+                ->withErrors('Failed to create employee: ' . $th->getMessage())
+                ->withInput();
         }
     }
-
 
 
     public function edit($employee)

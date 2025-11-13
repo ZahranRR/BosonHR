@@ -57,7 +57,7 @@
                             <div class="form-group">
                                 <label for="attachment">Attachment (Image)</label>
                                 <input type="file" name="attachment" id="attachment" class="form-control" accept="image/*">
-                                <small class="text-muted">Upload bukti foto (format: jpg, png, jpeg, max 2MB)</small>
+                                <small class="text-muted">Upload Attachment (format: jpg, png, jpeg, max 2MB)</small>
                             </div>
 
                             <!-- Select Manager -->

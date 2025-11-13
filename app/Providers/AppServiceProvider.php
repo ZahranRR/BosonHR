@@ -7,6 +7,7 @@ use App\Models\Role;
 use Illuminate\Support\Facades\View;
 use Closure;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\URL;
 use Spatie\Permission\Models\Role as SpatieRole;
 use App\Models\Attandance;
 use App\Observers\AttandanceObserver;

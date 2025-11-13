@@ -54,8 +54,8 @@
                                 <th class="text-center" style="width: 10%;">Last Name</th>
                                 <th class="text-center" style="width: 10%;">Division</th>
                                 <th class="text-center" style="width: 20%;">Email</th>
-                                <th class="text-center" style="width: 20%;">Address</th>
-                                <th class="text-right" style="width: 20%;">Actions</th>
+                                <th class="text-center" style="width: 30%;">Address</th>
+                                <th class="text-center" style="width: 10%;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -66,7 +66,7 @@
                                     <td class="text-center">{{ $employee->division->name ?? '-'}}</td>
                                     <td class="text-center">{{ $employee->email }}</td>
                                     <td class="text-center">{{ $employee->address }}</td>
-                                    <td class="project-actions text-right">
+                                    <td class="project-actions text-center">
                                         <a class="btn btn-info btn-sm"
                                             href="{{ route('employee.edit', $employee->employee_id) }}">
                                             <i class="fas fa-pencil-alt"></i> Edit
@@ -77,7 +77,7 @@
                                             @csrf
                                             @method('DELETE')
                                             <button type="button" class="deletebutton btn btn-danger btn-sm">
-                                                <i class="deletebutton fas fa-trash"></i> Delete
+                                                <i class="deletebutton fas"></i> Delete
                                             </button>
                                         </form>
                                     </td>

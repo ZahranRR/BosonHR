@@ -368,21 +368,17 @@ Route::middleware(['auth', 'checkRoleStatus'])->group(function () {
             ->name('kasbon.store')
             ->middleware('permission:kasbon.create');
 
-        // Route::post('/kasbon', [KasbonController::class, 'store'])
-        //     ->name('kasbon.store')
-        //     ->middleware('permission:kasbon.create');
+        Route::delete('/kasbon/{id}', [CashAdvanceController::class, 'destroy'])
+            ->name('kasbon.destroy')
+            ->middleware('permission:kasbon.index');
 
-        // Route::get('/kasbon/{id}/edit', [KasbonController::class, 'edit'])
-        //     ->name('kasbon.edit')
-        //     ->middleware('permission:kasbon.edit');
+        Route::get('/kasbon/{id}/edit', [CashAdvanceController::class, 'edit'])
+            ->name('kasbon.edit')
+            ->middleware('permission:kasbon.index');
 
-        // Route::put('/kasbon/{id}', [KasbonController::class, 'update'])
-        //     ->name('kasbon.update')
-        //     ->middleware('permission:kasbon.edit');
-
-        // Route::delete('/kasbon/{id}', [KasbonController::class, 'destroy'])
-        //     ->name('kasbon.delete')
-        //     ->middleware('permission:kasbon.delete');
+        Route::put('/kasbon/{id}', [CashAdvanceController::class, 'update'])
+            ->name('kasbon.update')
+            ->middleware('permission:kasbon.index');
     });
 
     // Employee Routes

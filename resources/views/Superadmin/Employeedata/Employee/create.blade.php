@@ -195,6 +195,7 @@
                                     <label for="cv_file">CV File</label>
                                     <input type="file" name="cv_file" id="cv_file" class="form-control"
                                         value="{{ old('cv_file') }}" required>
+                                        <small class="text-muted">Upload CV File (format: pdf, docx, max 2MB)</small>
                                 </div>
 
                                 <div class="form-group">
