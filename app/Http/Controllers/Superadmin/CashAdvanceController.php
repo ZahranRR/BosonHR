@@ -52,8 +52,10 @@ class CashAdvanceController extends Controller
                 ->whereRaw("LEFT(start_month, 7) = ?", [$month])
                 ->exists();
 
-            if ($exists) continue; // skip kalau sudah ada
-
+            if ($exists) {
+                return redirect()->back()->with('error', 'You already have a cash advance for that month.');
+            }
+            
             CashAdvance::create([
                 'employee_id' => $request->employee_id,
                 'total_amount' => $request->total_amount,

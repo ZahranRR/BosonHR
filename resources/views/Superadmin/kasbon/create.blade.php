@@ -5,6 +5,19 @@
         <section class="content">
             <div class="container-fluid">
                 <div class="card card-primary">
+
+                    @if (session('error'))
+                        <script>
+                            document.addEventListener('DOMContentLoaded', function () {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Oops...',
+                                    text: '{{ session('error') }}',
+                                });
+                            });
+                        </script>
+                    @endif
+
                     <div class="card-header">
                         <h3 class="card-title">Add Cash Advance</h3>
                     </div>
