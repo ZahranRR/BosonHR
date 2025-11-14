@@ -19,7 +19,7 @@ class SlipPayControllerNew extends Controller
             Log::warning('SlipPayControllerNew@index: employee relasi tidak ditemukan untuk user login', [
                 'user_id' => Auth::id(),
             ]);
-            return view('employee.slip_pay.index', [
+            return view('Employee.slip_pay.index', [
                 'payroll' => null,
                 'availableMonths' => collect(),
                 'selectedMonth' => null,
@@ -51,21 +51,26 @@ class SlipPayControllerNew extends Controller
             'total_salary' => $payroll?->total_salary,
         ]);
     
-        return view('employee.slip_pay.index', compact('payroll', 'availableMonths', 'selectedMonth'));
-    }
-    
+        return view('Employee.slip_pay.index', compact('payroll', 'availableMonths', 'selectedMonth'));
+    }    
 
     public function previewPDF($id)
     {
         Log::info('SlipPayControllerNew@previewPDF dipanggil', ['payroll_id' => $id]);
 
         $payroll = Payroll::with('employee.division')->find($id);
+        $companyname = \App\Models\CompanyName::first();
+
         if (!$payroll) {
             Log::error('SlipPayControllerNew@previewPDF: payroll tidak ditemukan', ['payroll_id' => $id]);
             abort(404, 'Payroll not found');
         }
 
-        $pdf = Pdf::loadView('employee.slip_pay.slip', compact('payroll'));
+        $pdf = Pdf::loadView('Employee.slip_pay.slip', [
+            'payroll' => $payroll,
+            'companyname' => $companyname,
+        ]);
+
         return $pdf->stream('Slip_Gaji_' . $payroll->employee->first_name . '_' . $payroll->month . '.pdf');
     }
 
@@ -74,12 +79,18 @@ class SlipPayControllerNew extends Controller
         Log::info('SlipPayControllerNew@downloadPDF dipanggil', ['payroll_id' => $id]);
 
         $payroll = Payroll::with('employee.division')->find($id);
+        $companyname = \App\Models\CompanyName::first();
+
         if (!$payroll) {
             Log::error('SlipPayControllerNew@downloadPDF: payroll tidak ditemukan', ['payroll_id' => $id]);
             abort(404, 'Payroll not found');
         }
 
-        $pdf = Pdf::loadView('employee.slip_pay.slip', compact('payroll'));
+        $pdf = Pdf::loadView('Employee.slip_pay.slip', [
+            'payroll' => $payroll,
+            'companyname' => $companyname,
+        ]);
+
         return $pdf->download('Slip_Gaji_' . $payroll->employee->first_name . '_' . $payroll->month . '.pdf');
     }
 }

@@ -10,42 +10,10 @@
             font-size: 12px;
         }
 
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .header-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 20px;
-            gap: 30px;
-            /* jarak antara kiri dan kanan */
-        }
-
-        .company-info {
-            flex: 1;
-            max-width: 55%;
-            word-wrap: break-word;
-            white-space: normal;
-            line-height: 1.4;
-        }
-
-        .employee-info {
-            width: 40%;
-        }
-
-        .employee-info table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .employee-info th,
-        .employee-info td {
-            border: 1px solid #000;
-            padding: 6px;
-            text-align: left;
+        .header-table,
+        .header-table tr,
+        .header-table td {
+            border: none !important;
         }
 
         .section-title {
@@ -97,24 +65,38 @@
 </head>
 
 <body>
-    <div class="header">
-        <h2>SLIP GAJI</h2>
-    </div>
+    <table width="100%" class="header-table" style="margin-bottom:20px;">
+        <tr>
+            <td style="width: 20%; text-align:left;">
+                <img src="{{ public_path('storage/' . $companyname->image) }}" style="width: 80px;">
+            </td>
+            <td style="width: 60%; text-align:center;">
+                <h2 style="margin:0;">SLIP GAJI</h2>
+            </td>
+            <td style="width: 20%;"></td>
+        </tr>
+    </table>
+
     <table style="width:100%; border-collapse: collapse; margin-bottom:20px; margin-top:20px;">
         <tr>
             <td style="
-                        width: 55%;
-                        vertical-align: top;
-                        max-width: 300px;
-                        line-height: 1.4;
-                        word-wrap: break-word;
-                        overflow-wrap: break-word;
-                        word-break: break-all;
-                        white-space: normal;
-                        border:none;
-                ">
+                            width: 55%;
+                            vertical-align: top;
+                            max-width: 300px;
+                            line-height: 1.4;
+                            word-wrap: break-word;
+                            overflow-wrap: break-word;
+                            word-break: break-all;
+                            white-space: normal;
+                            border:none;
+                    ">
+                {{-- <img src="{{ public_path('storage/' . $companyname->image) }}"
+                    style="width: 90px; margin-bottom: 8px;"> --}}
+
+                <div style="margin-top: 5px; line-height: 1.4;"></div>
                 <strong>{{ $companyname->name_company ?? 'Nama Perusahaan' }}</strong><br>
                 {{ $companyname->company_address ?? 'Alamat perusahaan belum diatur' }}
+                </div>
             </td>
 
             <td style="width:45%; vertical-align: top; border: none;">
